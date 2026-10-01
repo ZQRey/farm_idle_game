@@ -354,55 +354,137 @@ func _process_night_camp(_delta: float) -> void:
 		w.visible = false
 
 # ------------------------------------------------------------------------------
-# ВЗАИМОДЕЙСТВИЕ С ВОРОНАМИ (ОНИ ПУГАЮТСЯ ТЕХНИКИ И УЛЕТАЮТ)
+# ВЗАИМОДЕЙСТВИЕ С ВОРОНАМИ (ОНИ ПРИЛЕТАЮТ СВЕРХУ, ПУГАЮТСЯ СЕЯТЕЛЕЙ И УЛЕТАЮТ)
 # ------------------------------------------------------------------------------
 func spawn_crows_event() -> void:
 	for i in range(active_crows.size()):
 		var crow: Sprite2D = active_crows[i]
-		crow.visible = true
-		# Расставляем по полю
-		var cx: float = randf_range(150.0, screen_width - 150.0)
-		crow.position = Vector2(cx, GROUND_Y - 26.0)
-		crow.region_rect = Rect2(48, 0, 16, 16) # сидит
+		
+		# Завершаем любой предыдущий твин
+		if crow.has_meta("active_tween"):
+			var prev_tw = crow.get_meta("active_tween")
+			if prev_tw != null and prev_tw.is_valid():
+				prev_tw.kill()
 
-func _update_crows_interaction(delta: float) -> void:
-	var danger_x: float = vehicle_x + 30.0
-	if current_state == State.SOWING and seeder_workers.size() > 0 and seeder_workers[0].visible:
-		danger_x = max(danger_x, seeder_workers[0].position.x)
+		crow.visible = true
+		crow.set_meta("flying", true)
+		crow.set_meta("landing", true)
+
+		# Целевая точка приземления на поле
+		var target_x: float = randf_range(140.0, screen_width - 140.0)
+		var target_y: float = GROUND_Y - 26.0
+
+		# Стартовая точка прилета в небе (сверху за пределами экрана)
+		var fly_from_left: bool = (randf() > 0.5)
+		var start_x: float = target_x - randf_range(160.0, 260.0) if fly_from_left else target_x + randf_range(160.0, 260.0)
+		var start_y: float = -45.0 - randf_range(0.0, 30.0)
+		crow.position = Vector2(start_x, start_y)
+		crow.region_rect = Rect2(16, 0, 16, 16) # полет (крылья вверх)
+		crow.flip_h = not fly_from_left
+
+		# Твин плавного прилета птицы на поле (стаей с небольшой задержкой)
+		var flight_duration: float = randf_range(1.2, 1.6)
+		var delay: float = i * 0.22
+		
+		var tw: Tween = create_tween()
+		crow.set_meta("active_tween", tw)
+		if delay > 0.0:
+			tw.tween_interval(delay)
+		tw.tween_property(crow, "position", Vector2(target_x, target_y), flight_duration).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+		tw.tween_callback(func(c: Sprite2D = crow):
+			c.set_meta("flying", false)
+			c.set_meta("landing", false)
+			c.region_rect = Rect2(48, 0, 16, 16) # села на землю
+		)
+
+func _update_crows_interaction(_delta: float) -> void:
+	# Собираем все текущие источники опасности (координаты X)
+	var danger_sources: Array[float] = []
+
+	# 1. Техника (трактор, комбайн, грузовик), если она на поле
+	if vehicle_sprite != null and vehicle_sprite.visible and vehicle_x > -50.0 and vehicle_x < screen_width + 50.0:
+		danger_sources.append(vehicle_x + 20.0)
+
+	# 2. Сеятели (проверяем каждого отдельного рабочего-сеятеля на поле)
+	if current_state == State.SOWING and not GameManager.has_seeder_tractor:
+		for w in seeder_workers:
+			if w != null and w.visible and w.position.x > -40.0 and w.position.x < screen_width + 40.0:
+				danger_sources.append(w.position.x + 12.0)
+
+	# 3. Собака охраны
+	if GameManager.has_guard_dog and seeder_workers.size() > 0:
+		var dog_pos_x: float = seeder_workers[0].position.x if (current_state == State.SOWING and not GameManager.has_seeder_tractor) else screen_width * 0.5
+		danger_sources.append(dog_pos_x)
 
 	for i in range(active_crows.size()):
 		var crow: Sprite2D = active_crows[i]
 		if not crow.visible:
 			continue
 
-		# Проверка пугал
+		var is_flying: bool = crow.has_meta("flying") and bool(crow.get_meta("flying"))
+
+		if is_flying:
+			# Анимация махов крыльев в воздухе (кадры 16 и 32)
+			var wing_frame: int = 16 if (int(anim_timer * 9.0 + i) % 2 == 0) else 32
+			crow.region_rect = Rect2(wing_frame, 0, 16, 16)
+			continue
+
+		# Анимация клевания на земле (кадры 48 и 64)
+		var ground_frame: int = 48 if (int(anim_timer * 3.5 + i) % 2 == 0) else 64
+		crow.region_rect = Rect2(ground_frame, 0, 16, 16)
+
+		# 1. Проверка пугал
 		if GameManager.scarecrow_count > 0:
 			for s in range(GameManager.scarecrow_count):
 				var scarecrow_x: float = (screen_width / float(GameManager.scarecrow_count + 1)) * (s + 1)
-				if abs(crow.position.x - scarecrow_x) < 140.0:
-					_scare_crow_away(crow)
+				if abs(crow.position.x - scarecrow_x) < 150.0:
+					_scare_crow_away(crow, scarecrow_x)
+					break
 
-		# Проверка приближения техники или сеятелей
-		var dist_to_danger: float = abs(crow.position.x - danger_x)
-		if dist_to_danger < 90.0:
-			_scare_crow_away(crow)
+		if crow.has_meta("flying") and bool(crow.get_meta("flying")):
+			continue
 
-		# Анимация клевания на земле
-		if crow.position.y >= GROUND_Y - 30.0:
-			var frame_idx: int = 2 if (int(anim_timer * 4.0 + i) % 2 == 0) else 3
-			crow.region_rect = Rect2(frame_idx * 16, 0, 16, 16)
+		# 2. Проверка приближения сеятелей или техники
+		for threat_x in danger_sources:
+			var dist: float = abs(crow.position.x - threat_x)
+			if dist < 120.0:
+				_scare_crow_away(crow, threat_x)
+				break
 
-func _scare_crow_away(crow: Sprite2D) -> void:
-	if crow.get_meta("flying", false):
-		return
+func _scare_crow_away(crow: Sprite2D, threat_x: float = -9999.0) -> void:
+	var is_flying: bool = crow.has_meta("flying") and bool(crow.get_meta("flying"))
+	var is_landing: bool = crow.has_meta("landing") and bool(crow.get_meta("landing"))
+	if is_flying and not is_landing:
+		return # уже улетает
+
+	if crow.has_meta("active_tween"):
+		var prev_tw = crow.get_meta("active_tween")
+		if prev_tw != null and prev_tw.is_valid():
+			prev_tw.kill()
+
 	crow.set_meta("flying", true)
+	crow.set_meta("landing", false)
 	crow.region_rect = Rect2(16, 0, 16, 16) # полет
+	
+	# Улетает в сторону ОТ приближающегося человека/машины
+	var fly_dir: float = 1.0
+	if threat_x != -9999.0:
+		fly_dir = 1.0 if crow.position.x >= threat_x else -1.0
+	else:
+		fly_dir = 1.0 if randf() > 0.5 else -1.0
+		
+	crow.flip_h = (fly_dir < 0.0)
+	
+	var flight_x: float = crow.position.x + fly_dir * randf_range(180.0, 340.0)
+	var flight_y: float = -60.0 - randf_range(0.0, 25.0)
+	
 	var tw: Tween = create_tween()
-	var flight_x: float = crow.position.x + randf_range(120.0, 260.0)
-	tw.tween_property(crow, "position", Vector2(flight_x, -50.0), 1.2)
-	tw.tween_callback(func():
-		crow.visible = false
-		crow.set_meta("flying", false)
+	crow.set_meta("active_tween", tw)
+	tw.tween_property(crow, "position", Vector2(flight_x, flight_y), randf_range(1.1, 1.5)).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tw.tween_callback(func(c: Sprite2D = crow):
+		c.visible = false
+		c.set_meta("flying", false)
+		c.set_meta("landing", false)
 	)
 
 # ------------------------------------------------------------------------------
