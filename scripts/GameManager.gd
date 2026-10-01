@@ -3,6 +3,7 @@ extends RefCounted
 
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
+const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 
 signal bankruptcy_declared
 signal season_changed(new_season: Season, season_name: String)
@@ -206,6 +207,7 @@ static func get_season_price_multiplier(s: Season = current_season) -> float:
 # СОХРАНЕНИЕ И ЗАГРУЗКА
 # ==============================================================================
 static func init_from_settings() -> void:
+	ProgressionManager.init_from_settings()
 	coins = int(SettingsManager.config.get_value("game", "coins", 100))
 	current_crop = str(SettingsManager.config.get_value("game", "current_crop", "wheat"))
 	speed_multiplier = float(SettingsManager.config.get_value("game", "speed_multiplier", 1.0))
@@ -300,6 +302,7 @@ static func save_to_settings() -> void:
 		if CROPS[cid]["unlocked"]:
 			unlocked_list.append(cid)
 	SettingsManager.config.set_value("game", "unlocked_crops", unlocked_list)
+	ProgressionManager.write_to_config()
 	SettingsManager.save_settings()
 
 static func add_coins(amount: int) -> void:
