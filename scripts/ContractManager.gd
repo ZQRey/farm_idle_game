@@ -93,7 +93,7 @@ static func refresh_board(force: bool = false) -> bool:
 	var now: int = _now()
 	_expire_active_contracts()
 
-	if not force and offers.size() == OFFER_COUNT and board_refresh_at > now:
+	if not force and board_refresh_at > now:
 		return false
 
 	offers.clear()
