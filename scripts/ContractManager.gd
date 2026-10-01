@@ -169,6 +169,12 @@ static func abandon_contract(contract_id: String) -> bool:
 			return true
 	return false
 
+static func reset_all_contracts() -> void:
+	offers.clear()
+	active_contracts.clear()
+	board_refresh_at = 0
+	refresh_board(true)
+
 static func get_board_refresh_seconds_left() -> int:
 	return max(0, board_refresh_at - _now())
 
