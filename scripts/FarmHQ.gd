@@ -2,6 +2,7 @@ class_name FarmHQ
 extends Window
 
 const GameManager = preload("res://scripts/GameManager.gd")
+const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 
@@ -23,6 +24,13 @@ signal police_bribe_requested
 @onready var btn_resolve_strike: Button = $VBox/Header/BtnResolveStrike
 @onready var btn_emergency_repair: Button = $VBox/Header/BtnEmergencyRepair
 @onready var tab_container: TabContainer = $VBox/TabContainer
+
+# Долгосрочная прогрессия фермы (создается динамически, чтобы не ломать сцену HQ)
+var lbl_farm_level: Label
+var lbl_reputation: Label
+var xp_bar: ProgressBar
+var lbl_xp_progress: Label
+var lbl_next_unlock: Label
 
 # Магазин семян
 @onready var seed_container: VBoxContainer = $VBox/TabContainer/Магазин/ScrollSeeds/VBoxSeeds
@@ -112,6 +120,7 @@ func _ready() -> void:
 	if tab_container != null and not tab_container.tab_changed.is_connected(_on_tab_changed):
 		tab_container.tab_changed.connect(_on_tab_changed)
 	_setup_window_position()
+	_setup_progression_ui()
 	_setup_monitors_list()
 	_setup_graphics_and_fps()
 	_setup_garage_and_decor()
@@ -143,6 +152,59 @@ func open_hq() -> void:
 	show()
 	grab_focus()
 
+func _setup_progression_ui() -> void:
+	var root_vbox: VBoxContainer = $VBox
+	var panel: PanelContainer = PanelContainer.new()
+	panel.name = "ProgressionSummary"
+	panel.tooltip_text = "Уровень фермы открывает новые культуры, постройки и технику."
+	
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	panel.add_child(vbox)
+
+	var top_row: HBoxContainer = HBoxContainer.new()
+	top_row.add_theme_constant_override("separation", 18)
+	vbox.add_child(top_row)
+
+	lbl_farm_level = Label.new()
+	lbl_farm_level.theme_override_font_sizes.font_size = 15
+	top_row.add_child(lbl_farm_level)
+
+	lbl_reputation = Label.new()
+	lbl_reputation.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_row.add_child(lbl_reputation)
+
+	var xp_row: HBoxContainer = HBoxContainer.new()
+	xp_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(xp_row)
+
+	xp_bar = ProgressBar.new()
+	xp_bar.custom_minimum_size = Vector2(220, 18)
+	xp_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	xp_bar.show_percentage = false
+	xp_row.add_child(xp_bar)
+
+	lbl_xp_progress = Label.new()
+	lbl_xp_progress.custom_minimum_size = Vector2(110, 0)
+	xp_row.add_child(lbl_xp_progress)
+
+	lbl_next_unlock = Label.new()
+	lbl_next_unlock.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl_next_unlock.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	xp_row.add_child(lbl_next_unlock)
+
+	root_vbox.add_child(panel)
+	root_vbox.move_child(panel, 1)
+
+func _apply_feature_purchase_state(button: Button, feature_id: String, available_text: String, cost: int) -> void:
+	var required_level: int = ProgressionManager.get_feature_required_level(feature_id)
+	if not ProgressionManager.can_access_feature(feature_id):
+		button.text = "🔒 Требуется ур. %d" % required_level
+		button.disabled = true
+	else:
+		button.text = available_text
+		button.disabled = GameManager.coins < cost
+
 func _setup_repair_buttons() -> void:
 	var do_repair = func():
 		repair_requested.emit()
@@ -160,6 +222,23 @@ func _setup_repair_buttons() -> void:
 func _update_ui() -> void:
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins
+
+	if lbl_farm_level != null:
+		lbl_farm_level.text = "⭐ Ферма: ур. %d / %d" % [ProgressionManager.farm_level, ProgressionManager.MAX_LEVEL]
+	if lbl_reputation != null:
+		lbl_reputation.text = "🏅 Репутация: %d — %s" % [ProgressionManager.reputation, ProgressionManager.get_reputation_title()]
+	if xp_bar != null and lbl_xp_progress != null:
+		var xp_required: int = ProgressionManager.get_xp_required_for_current_level()
+		if ProgressionManager.farm_level >= ProgressionManager.MAX_LEVEL:
+			xp_bar.max_value = 1.0
+			xp_bar.value = 1.0
+			lbl_xp_progress.text = "MAX"
+		else:
+			xp_bar.max_value = float(max(1, xp_required))
+			xp_bar.value = float(ProgressionManager.xp)
+			lbl_xp_progress.text = "%d / %d XP" % [ProgressionManager.xp, xp_required]
+	if lbl_next_unlock != null:
+		lbl_next_unlock.text = "Следующее: %s" % ProgressionManager.get_next_unlock_text()
 
 	# Сезон года и модификатор рыночных цен
 	if lbl_season != null:
@@ -221,8 +300,7 @@ func _update_ui() -> void:
 			btn_buy_windmill.text = "Построено ✔"
 			btn_buy_windmill.disabled = true
 		else:
-			btn_buy_windmill.text = "Построить (600 🪙)"
-			btn_buy_windmill.disabled = GameManager.coins < 600
+			_apply_feature_purchase_state(btn_buy_windmill, "windmill", "Построить (600 🪙)", 600)
 
 	# Амбар
 	if btn_buy_barn != null:
@@ -230,8 +308,7 @@ func _update_ui() -> void:
 			btn_buy_barn.text = "Построено ✔"
 			btn_buy_barn.disabled = true
 		else:
-			btn_buy_barn.text = "Построить (450 🪙)"
-			btn_buy_barn.disabled = GameManager.coins < 450
+			_apply_feature_purchase_state(btn_buy_barn, "barn", "Построить (450 🪙)", 450)
 
 	# Навес
 	if btn_buy_canopy != null:
@@ -239,8 +316,7 @@ func _update_ui() -> void:
 			btn_buy_canopy.text = "Максимум (2/2) ✔"
 			btn_buy_canopy.disabled = true
 		else:
-			btn_buy_canopy.text = "Построить (%d/2 за 250 🪙)" % [GameManager.canopy_count]
-			btn_buy_canopy.disabled = GameManager.coins < 250
+			_apply_feature_purchase_state(btn_buy_canopy, "canopy", "Построить (%d/2 за 250 🪙)" % [GameManager.canopy_count], 250)
 
 	# Пугало (до 3 на монитор)
 	if btn_buy_scarecrow != null:
@@ -249,8 +325,7 @@ func _update_ui() -> void:
 			btn_buy_scarecrow.text = "Максимум (%d/%d) ✔" % [GameManager.scarecrow_count, max_s]
 			btn_buy_scarecrow.disabled = true
 		else:
-			btn_buy_scarecrow.text = "Купить (%d/%d за 150 🪙)" % [GameManager.scarecrow_count, max_s]
-			btn_buy_scarecrow.disabled = GameManager.coins < 150
+			_apply_feature_purchase_state(btn_buy_scarecrow, "scarecrow", "Купить (%d/%d за 150 🪙)" % [GameManager.scarecrow_count, max_s], 150)
 
 	# Сеялка
 	if btn_buy_seeder != null:
@@ -258,8 +333,7 @@ func _update_ui() -> void:
 			btn_buy_seeder.text = "Куплено ✔"
 			btn_buy_seeder.disabled = true
 		else:
-			btn_buy_seeder.text = "Купить (350 🪙)"
-			btn_buy_seeder.disabled = GameManager.coins < 350
+			_apply_feature_purchase_state(btn_buy_seeder, "seeder", "Купить (350 🪙)", 350)
 
 	# Собака
 	if btn_buy_dog != null:
@@ -267,8 +341,7 @@ func _update_ui() -> void:
 			btn_buy_dog.text = "Куплено ✔"
 			btn_buy_dog.disabled = true
 		else:
-			btn_buy_dog.text = "Купить (500 🪙)"
-			btn_buy_dog.disabled = GameManager.coins < 500
+			_apply_feature_purchase_state(btn_buy_dog, "guard_dog", "Купить (500 🪙)", 500)
 
 	# Скорость
 	if btn_buy_speed != null and lbl_speed_level != null:
@@ -321,24 +394,21 @@ func _update_ui() -> void:
 			btn_buy_heavy_tractor.text = "Куплено ✔"
 			btn_buy_heavy_tractor.disabled = true
 		else:
-			btn_buy_heavy_tractor.text = "Купить (800 🪙)"
-			btn_buy_heavy_tractor.disabled = GameManager.coins < 800
+			_apply_feature_purchase_state(btn_buy_heavy_tractor, "heavy_tractor", "Купить (800 🪙)", 800)
 
 	if btn_buy_super_harvester != null:
 		if GameManager.has_super_harvester:
 			btn_buy_super_harvester.text = "Куплено ✔"
 			btn_buy_super_harvester.disabled = true
 		else:
-			btn_buy_super_harvester.text = "Купить (1200 🪙)"
-			btn_buy_super_harvester.disabled = GameManager.coins < 1200
+			_apply_feature_purchase_state(btn_buy_super_harvester, "super_harvester", "Купить (1200 🪙)", 1200)
 
 	if btn_buy_road_train != null:
 		if GameManager.has_road_train:
 			btn_buy_road_train.text = "Куплено ✔"
 			btn_buy_road_train.disabled = true
 		else:
-			btn_buy_road_train.text = "Купить (950 🪙)"
-			btn_buy_road_train.disabled = GameManager.coins < 950
+			_apply_feature_purchase_state(btn_buy_road_train, "road_train", "Купить (950 🪙)", 950)
 
 	# Производство и ТО: Топливо
 	if lbl_fuel_level != null:
@@ -361,8 +431,7 @@ func _update_ui() -> void:
 			btn_buy_gh.text = "Максимум (2/2) ✔"
 			btn_buy_gh.disabled = true
 		else:
-			btn_buy_gh.text = "Купить теплицу (700 🪙)"
-			btn_buy_gh.disabled = (GameManager.coins < 700)
+			_apply_feature_purchase_state(btn_buy_gh, "greenhouse", "Купить теплицу (700 🪙)", 700)
 	if lbl_gh_crop_info != null:
 		var gh_data: Dictionary = GameManager.get_current_greenhouse_data()
 		lbl_gh_crop_info.text = "%s: доход +%d 🪙 (семена %d 🪙, созревание %.0f сек)" % [
@@ -418,9 +487,14 @@ func _refresh_seeds_ui() -> void:
 		hbox.add_theme_constant_override("separation", 12)
 		item_panel.add_child(hbox)
 
+		var this_cid: String = str(crop_id)
+		var this_cost: int = int(c_data.seed_cost)
+		var is_unlocked: bool = bool(c_data.unlocked)
+		var required_level: int = ProgressionManager.get_crop_required_level(this_cid)
+
 		var lbl_info: Label = Label.new()
-		lbl_info.text = "%s\n⏱ Рост: %.0fc | 💰 Доход: +%d 🪙 | 🌱 Семена: %d 🪙/цикл" % [
-			c_data.name, c_data.growth_time, c_data.base_reward, c_data.seed_cost
+		lbl_info.text = "%s\n⏱ Рост: %.0fc | 💰 Доход: +%d 🪙 | 🌱 Семена: %d 🪙/цикл | ⭐ Ур. %d" % [
+			c_data.name, c_data.growth_time, c_data.base_reward, c_data.seed_cost, required_level
 		]
 		lbl_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hbox.add_child(lbl_info)
@@ -428,21 +502,21 @@ func _refresh_seeds_ui() -> void:
 		var btn: Button = Button.new()
 		btn.custom_minimum_size = Vector2(160, 36)
 
-		var this_cid: String = str(crop_id)
-		var this_cost: int = int(c_data.seed_cost)
-		var is_unlocked: bool = bool(c_data.unlocked)
-
 		if not is_unlocked:
-			btn.text = "Открыть (%d 🪙)" % this_cost
-			btn.disabled = GameManager.coins < this_cost
-			btn.pressed.connect(func(target_cid: String = this_cid, target_cost: int = this_cost):
-				if GameManager.spend_coins(target_cost):
-					GameManager.CROPS[target_cid]["unlocked"] = true
-					GameManager.current_crop = target_cid
-					GameManager.save_to_settings()
-					_refresh_seeds_ui()
-					_update_ui()
-			)
+			if not ProgressionManager.can_unlock_crop(this_cid):
+				btn.text = "🔒 Требуется ур. %d" % required_level
+				btn.disabled = true
+			else:
+				btn.text = "Открыть (%d 🪙)" % this_cost
+				btn.disabled = GameManager.coins < this_cost
+				btn.pressed.connect(func(target_cid: String = this_cid, target_cost: int = this_cost):
+					if ProgressionManager.can_unlock_crop(target_cid) and GameManager.spend_coins(target_cost):
+						GameManager.CROPS[target_cid]["unlocked"] = true
+						GameManager.current_crop = target_cid
+						GameManager.save_to_settings()
+						_refresh_seeds_ui()
+						_update_ui()
+				)
 		else:
 			if GameManager.current_crop == this_cid:
 				btn.text = "Выбрано для сева ✔"
@@ -462,21 +536,21 @@ func _refresh_seeds_ui() -> void:
 
 func _setup_upgrades_tab() -> void:
 	btn_buy_windmill.pressed.connect(func():
-		if GameManager.spend_coins(600):
+		if ProgressionManager.can_access_feature("windmill") and GameManager.spend_coins(600):
 			GameManager.has_windmill = true
 			GameManager.save_to_settings()
 			_update_ui()
 	)
 
 	btn_buy_barn.pressed.connect(func():
-		if GameManager.spend_coins(450):
+		if ProgressionManager.can_access_feature("barn") and GameManager.spend_coins(450):
 			GameManager.has_barn = true
 			GameManager.save_to_settings()
 			_update_ui()
 	)
 
 	btn_buy_canopy.pressed.connect(func():
-		if GameManager.canopy_count < 2 and GameManager.spend_coins(250):
+		if ProgressionManager.can_access_feature("canopy") and GameManager.canopy_count < 2 and GameManager.spend_coins(250):
 			GameManager.canopy_count += 1
 			GameManager.save_to_settings()
 			_update_ui()
@@ -484,21 +558,21 @@ func _setup_upgrades_tab() -> void:
 
 	btn_buy_scarecrow.pressed.connect(func():
 		var max_s: int = GameManager.get_max_scarecrows()
-		if GameManager.scarecrow_count < max_s and GameManager.spend_coins(150):
+		if ProgressionManager.can_access_feature("scarecrow") and GameManager.scarecrow_count < max_s and GameManager.spend_coins(150):
 			GameManager.scarecrow_count += 1
 			GameManager.save_to_settings()
 			_update_ui()
 	)
 
 	btn_buy_seeder.pressed.connect(func():
-		if GameManager.spend_coins(350):
+		if ProgressionManager.can_access_feature("seeder") and GameManager.spend_coins(350):
 			GameManager.has_seeder_tractor = true
 			GameManager.save_to_settings()
 			_update_ui()
 	)
 
 	btn_buy_dog.pressed.connect(func():
-		if GameManager.spend_coins(500):
+		if ProgressionManager.can_access_feature("guard_dog") and GameManager.spend_coins(500):
 			GameManager.has_guard_dog = true
 			GameManager.save_to_settings()
 			_update_ui()
@@ -515,7 +589,7 @@ func _setup_upgrades_tab() -> void:
 func _setup_garage_and_decor() -> void:
 	if btn_buy_heavy_tractor != null:
 		btn_buy_heavy_tractor.pressed.connect(func():
-			if GameManager.spend_coins(800):
+			if ProgressionManager.can_access_feature("heavy_tractor") and GameManager.spend_coins(800):
 				GameManager.has_heavy_tractor = true
 				GameManager.save_to_settings()
 				_update_ui()
@@ -523,7 +597,7 @@ func _setup_garage_and_decor() -> void:
 
 	if btn_buy_super_harvester != null:
 		btn_buy_super_harvester.pressed.connect(func():
-			if GameManager.spend_coins(1200):
+			if ProgressionManager.can_access_feature("super_harvester") and GameManager.spend_coins(1200):
 				GameManager.has_super_harvester = true
 				GameManager.save_to_settings()
 				_update_ui()
@@ -531,7 +605,7 @@ func _setup_garage_and_decor() -> void:
 
 	if btn_buy_road_train != null:
 		btn_buy_road_train.pressed.connect(func():
-			if GameManager.spend_coins(950):
+			if ProgressionManager.can_access_feature("road_train") and GameManager.spend_coins(950):
 				GameManager.has_road_train = true
 				GameManager.save_to_settings()
 				_update_ui()
@@ -723,7 +797,7 @@ func _setup_production_tab() -> void:
 	# Теплицы
 	if btn_buy_gh != null:
 		btn_buy_gh.pressed.connect(func():
-			if GameManager.buy_greenhouse():
+			if ProgressionManager.can_access_feature("greenhouse") and GameManager.buy_greenhouse():
 				_update_ui()
 		)
 
