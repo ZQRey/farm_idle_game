@@ -2,6 +2,7 @@ class_name FieldFSM
 extends Node2D
 
 const GameManager = preload("res://scripts/GameManager.gd")
+const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const AssetGenerator = preload("res://tools/AssetGenerator.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
@@ -971,6 +972,14 @@ func _finish_hauling_cycle() -> void:
 	# Обработка финансов и выплат по долгам
 	var fin_res: Dictionary = GameManager.process_harvest_finances(final_reward)
 	GameManager.total_harvested += 1
+
+	# Долгосрочная прогрессия фермы: опыт и репутация за каждый полный цикл поля
+	var progression_result: Dictionary = ProgressionManager.add_harvest_progress(GameManager.current_crop)
+	var xp_gained: int = int(progression_result.get("xp_gained", 0))
+	if xp_gained > 0:
+		bonus_text += " [XP +%d]" % xp_gained
+	if bool(progression_result.get("leveled_up", false)):
+		bonus_text += " [Ур. %d!]" % ProgressionManager.farm_level
 
 	var debt_paid: int = fin_res.subsidy_paid + fin_res.loan_paid
 	if debt_paid > 0:

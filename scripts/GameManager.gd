@@ -3,6 +3,7 @@ extends RefCounted
 
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
+const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 
 signal bankruptcy_declared
 signal season_changed(new_season: Season, season_name: String)
@@ -206,6 +207,7 @@ static func get_season_price_multiplier(s: Season = current_season) -> float:
 # СОХРАНЕНИЕ И ЗАГРУЗКА
 # ==============================================================================
 static func init_from_settings() -> void:
+	ProgressionManager.init_from_settings()
 	coins = int(SettingsManager.config.get_value("game", "coins", 100))
 	current_crop = str(SettingsManager.config.get_value("game", "current_crop", "wheat"))
 	speed_multiplier = float(SettingsManager.config.get_value("game", "speed_multiplier", 1.0))
@@ -252,6 +254,33 @@ static func init_from_settings() -> void:
 	for crop_id in unlocked_crops:
 		if CROPS.has(crop_id):
 			CROPS[crop_id]["unlocked"] = true
+
+	# Миграция старых сохранений: уже купленный контент не должен выглядеть как ферма 1 уровня.
+	var legacy_min_level: int = 1
+	for crop_id in CROPS:
+		if bool(CROPS[crop_id]["unlocked"]):
+			legacy_min_level = max(legacy_min_level, ProgressionManager.get_crop_required_level(str(crop_id)))
+	if scarecrow_count > 0:
+		legacy_min_level = max(legacy_min_level, ProgressionManager.get_feature_required_level("scarecrow"))
+	if canopy_count > 0:
+		legacy_min_level = max(legacy_min_level, ProgressionManager.get_feature_required_level("canopy"))
+	if has_barn:
+		legacy_min_level = max(legacy_min_level, ProgressionManager.get_feature_required_level("barn"))
+	if has_windmill:
+		legacy_min_level = max(legacy_min_level, ProgressionManager.get_feature_required_level("windmill"))
+	if has_seeder_tractor:
+		legacy_min_level = max(legacy_min_level, ProgressionManager.get_feature_required_level("seeder"))
+	if has_guard_dog:
+		legacy_min_level = max(legacy_min_level, ProgressionManager.get_feature_required_level("guard_dog"))
+	if has_heavy_tractor:
+		legacy_min_level = max(legacy_min_level, ProgressionManager.get_feature_required_level("heavy_tractor"))
+	if greenhouse_count > 0:
+		legacy_min_level = max(legacy_min_level, ProgressionManager.get_feature_required_level("greenhouse"))
+	if has_road_train:
+		legacy_min_level = max(legacy_min_level, ProgressionManager.get_feature_required_level("road_train"))
+	if has_super_harvester:
+		legacy_min_level = max(legacy_min_level, ProgressionManager.get_feature_required_level("super_harvester"))
+	ProgressionManager.ensure_minimum_level(legacy_min_level)
 
 static func save_to_settings() -> void:
 	SettingsManager.config.set_value("game", "coins", coins)
@@ -300,6 +329,7 @@ static func save_to_settings() -> void:
 		if CROPS[cid]["unlocked"]:
 			unlocked_list.append(cid)
 	SettingsManager.config.set_value("game", "unlocked_crops", unlocked_list)
+	ProgressionManager.write_to_config()
 	SettingsManager.save_settings()
 
 static func add_coins(amount: int) -> void:

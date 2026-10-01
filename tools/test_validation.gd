@@ -4,6 +4,7 @@ extends SceneTree
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 const GameManager = preload("res://scripts/GameManager.gd")
+const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 
@@ -122,6 +123,45 @@ func _init() -> void:
 	f.close()
 	assert(content.contains("window/size/always_on_top=false"), "В project.godot должно быть window/size/always_on_top=false")
 	print("  ✔ ТЕСТ 5 УСПЕШНО ПРОЙДЕН!")
+
+	# 6. Тест: Уровни фермы, XP, репутация и сохранение прогрессии
+	print("\n[ТЕСТ 6] Проверка долгосрочной прогрессии фермы:")
+	var old_level: int = ProgressionManager.farm_level
+	var old_xp: int = ProgressionManager.xp
+	var old_rep: int = ProgressionManager.reputation
+	var old_lifetime_xp: int = ProgressionManager.lifetime_xp
+
+	ProgressionManager.farm_level = 1
+	ProgressionManager.xp = 0
+	ProgressionManager.reputation = 0
+	ProgressionManager.lifetime_xp = 0
+	var progress_result: Dictionary = ProgressionManager.add_xp(180, 3)
+
+	assert(ProgressionManager.farm_level == 2, "180 XP с первого уровня должны повысить ферму до уровня 2")
+	assert(ProgressionManager.xp == 80, "После повышения уровня должно остаться 80 XP")
+	assert(ProgressionManager.reputation == 3, "Репутация должна увеличиться на 3")
+	assert(bool(progress_result.get("leveled_up", false)), "Результат должен сообщить о повышении уровня")
+	assert(not ProgressionManager.can_unlock_crop("corn"), "Кукуруза должна требовать уровень 3")
+
+	ProgressionManager.farm_level = 3
+	assert(ProgressionManager.can_unlock_crop("corn"), "Кукуруза должна открываться на уровне 3")
+	ProgressionManager.save_to_settings()
+
+	ProgressionManager.farm_level = 1
+	ProgressionManager.xp = 0
+	ProgressionManager.reputation = 0
+	ProgressionManager.init_from_settings()
+	assert(ProgressionManager.farm_level == 3, "Уровень фермы должен восстанавливаться из сохранения")
+	assert(ProgressionManager.xp == 80, "XP должен восстанавливаться из сохранения")
+	assert(ProgressionManager.reputation == 3, "Репутация должна восстанавливаться из сохранения")
+
+	# Возвращаем исходный прогресс пользователя после теста.
+	ProgressionManager.farm_level = old_level
+	ProgressionManager.xp = old_xp
+	ProgressionManager.reputation = old_rep
+	ProgressionManager.lifetime_xp = old_lifetime_xp
+	ProgressionManager.save_to_settings()
+	print("  ✔ ТЕСТ 6 УСПЕШНО ПРОЙДЕН!")
 
 	print("\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ! СИСТЕМА ПОЛНОСТЬЮ ИСПРАВНА!")
 	quit(0)
