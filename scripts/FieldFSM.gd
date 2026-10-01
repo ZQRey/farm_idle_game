@@ -4,6 +4,7 @@ extends Node2D
 const GameManager = preload("res://scripts/GameManager.gd")
 const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const ContractManager = preload("res://scripts/ContractManager.gd")
+const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const AssetGenerator = preload("res://tools/AssetGenerator.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
@@ -937,53 +938,57 @@ func _process_hauling(delta: float, speed: float) -> void:
 		_finish_hauling_cycle()
 
 func _finish_hauling_cycle() -> void:
-	var crop_data: Dictionary = GameManager.get_current_crop_data()
-	var base_reward: int = int(crop_data.get("base_reward", 35))
-	
-	# Бонус супер-комбайна (+15% к урожайности)
-	if GameManager.has_super_harvester:
-		base_reward = int(base_reward * 1.15)
-
-	# Бонус амбара (+20%)
-	if GameManager.has_barn:
-		base_reward = int(base_reward * 1.20)
-
-	# Бонус мельницы (+50% за помол муки)
-	var final_reward: int = base_reward
+	var crop_id: String = GameManager.current_crop
 	var bonus_text: String = ""
-	if GameManager.has_windmill:
-		var flour_bonus: int = int(base_reward * 0.50)
-		final_reward += flour_bonus
-		bonus_text = " (Мука +%d)" % flour_bonus
 
-	# Сезонные цены (зимой дефицит и самая высокая цена +85%, весной +15%, осенью спад цен)
-	var season_mult: float = GameManager.get_season_price_multiplier()
-	final_reward = int(final_reward * season_mult)
-	if season_mult > 1.05:
-		bonus_text += " [Зима +%d%%]" % int((season_mult - 1.0) * 100.0)
-	elif season_mult < 0.95:
-		bonus_text += " [Осень -%d%%]" % int((1.0 - season_mult) * 100.0)
-
-	# Множитель прибыли от количества используемых мониторов (x2 для 2 мониторов, x3 для 3 и т.д.)
+	# Мульти-монитор теперь увеличивает физический объём урожая, а не цену одной партии.
 	var mon_mult: float = GameManager.get_monitor_profit_multiplier()
-	if mon_mult > 1.0:
-		final_reward = int(final_reward * mon_mult)
-		bonus_text += " [x%d Монитора]" % int(mon_mult)
+	var harvest_kg: float = InventoryManager.calculate_harvest_kg(mon_mult, GameManager.has_super_harvester)
+	var deposit: Dictionary = InventoryManager.deposit_crop(crop_id, harvest_kg)
+	var stored_kg: float = float(deposit.get("stored_kg", 0.0))
+	var overflow_kg: float = float(deposit.get("overflow_kg", 0.0))
 
-	# Обработка финансов и выплат по долгам
-	var fin_res: Dictionary = GameManager.process_harvest_finances(final_reward)
+	# Зарплаты, топливо и износ относятся к производству и списываются каждый цикл.
+	var production: Dictionary = GameManager.process_production_costs()
+	var transaction_net: int = -int(production.get("total_cost", 0))
+	var total_debt_paid: int = 0
+
+	if stored_kg > 0.0:
+		if InventoryManager.auto_sell_on_harvest:
+			var sold_kg: float = InventoryManager.remove_crop(crop_id, stored_kg)
+			var gross_sale: int = GameManager.calculate_crop_sale_value(crop_id, sold_kg)
+			var sale_result: Dictionary = GameManager.process_sale_finances(gross_sale)
+			transaction_net += int(sale_result.get("net_coins", 0))
+			total_debt_paid += int(sale_result.get("subsidy_paid", 0)) + int(sale_result.get("loan_paid", 0))
+			bonus_text += " [Продано %.0f кг]" % sold_kg
+		else:
+			bonus_text += " [Склад +%.0f кг]" % stored_kg
+
+	# При ручном хранении переполнение продаётся аварийно за 70%.
+	# В режиме автопродажи новый урожай продаётся по полной цене даже если старые запасы уже заняли склад.
+	if overflow_kg > 0.0:
+		var overflow_factor: float = 1.0 if InventoryManager.auto_sell_on_harvest else 0.70
+		var overflow_gross: int = int(round(float(GameManager.calculate_crop_sale_value(crop_id, overflow_kg)) * overflow_factor))
+		var overflow_sale: Dictionary = GameManager.process_sale_finances(overflow_gross)
+		transaction_net += int(overflow_sale.get("net_coins", 0))
+		total_debt_paid += int(overflow_sale.get("subsidy_paid", 0)) + int(overflow_sale.get("loan_paid", 0))
+		if InventoryManager.auto_sell_on_harvest:
+			bonus_text += " [Автопродажа %.0f кг]" % overflow_kg
+		else:
+			bonus_text += " [Переполнение %.0f кг → 70%%]" % overflow_kg
+
 	GameManager.total_harvested += 1
 
-	# Долгосрочная прогрессия фермы: опыт и репутация за каждый полный цикл поля
-	var progression_result: Dictionary = ProgressionManager.add_harvest_progress(GameManager.current_crop)
+	# Долгосрочная прогрессия фермы: опыт и репутация за каждый полный цикл поля.
+	var progression_result: Dictionary = ProgressionManager.add_harvest_progress(crop_id)
 	var xp_gained: int = int(progression_result.get("xp_gained", 0))
 	if xp_gained > 0:
 		bonus_text += " [XP +%d]" % xp_gained
 	if bool(progression_result.get("leveled_up", false)):
 		bonus_text += " [Ур. %d!]" % ProgressionManager.farm_level
 
-	# Прогресс принятых контрактов. Награды начисляются автоматически при выполнении.
-	var contract_rewards: Array = ContractManager.record_harvest(GameManager.current_crop)
+	# Контракты считаются по факту произведённого урожая, независимо от решения продать или хранить.
+	var contract_rewards: Array = ContractManager.record_harvest(crop_id)
 	if not contract_rewards.is_empty():
 		var contract_coins: int = 0
 		var contract_xp: int = 0
@@ -995,20 +1000,24 @@ func _finish_hauling_cycle() -> void:
 				contract_rep += int(reward.get("reputation", 0))
 		if contract_coins > 0:
 			GameManager.add_coins(contract_coins)
+			transaction_net += contract_coins
 		if contract_xp > 0 or contract_rep > 0:
 			ProgressionManager.add_xp(contract_xp, contract_rep)
 		bonus_text += " [Контракт +%d🪙 +%dXP]" % [contract_coins, contract_xp]
 
-	var debt_paid: int = fin_res.subsidy_paid + fin_res.loan_paid
-	if debt_paid > 0:
-		bonus_text += " [Долг: -%d]" % debt_paid
+	if total_debt_paid > 0:
+		bonus_text += " [Долг: -%d]" % total_debt_paid
 
-	_show_floating_coins(fin_res.net_coins, bonus_text)
+	var operating_cost: int = int(production.get("total_cost", 0))
+	if operating_cost > 0:
+		bonus_text += " [Расходы: -%d]" % operating_cost
+
+	_show_floating_coins(transaction_net, bonus_text)
 
 	soil_segments.fill(0)
 	crop_stages.fill(-1)
 
-	harvest_completed.emit(fin_res.net_coins)
+	harvest_completed.emit(transaction_net)
 	change_state(State.PLOWING)
 
 func reset_field_to_start() -> void:

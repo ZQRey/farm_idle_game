@@ -4,6 +4,7 @@ extends Window
 const GameManager = preload("res://scripts/GameManager.gd")
 const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const ContractManager = preload("res://scripts/ContractManager.gd")
+const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 
@@ -35,6 +36,9 @@ var lbl_next_unlock: Label
 
 # Контракты (динамическая вкладка)
 var contracts_container: VBoxContainer
+
+# Склад (динамическая вкладка)
+var storage_container: VBoxContainer
 
 # Магазин семян
 @onready var seed_container: VBoxContainer = $VBox/TabContainer/Магазин/ScrollSeeds/VBoxSeeds
@@ -126,6 +130,7 @@ func _ready() -> void:
 	_setup_window_position()
 	_setup_progression_ui()
 	_setup_contracts_tab()
+	_setup_storage_tab()
 	_setup_monitors_list()
 	_setup_graphics_and_fps()
 	_setup_garage_and_decor()
@@ -381,6 +386,173 @@ func _refresh_contracts_ui() -> void:
 			if offer is Dictionary:
 				contracts_container.add_child(_make_contract_panel(offer, false))
 
+func _setup_storage_tab() -> void:
+	if storage_container != null:
+		return
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.name = "Склад"
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	tab_container.add_child(margin)
+
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
+
+	storage_container = VBoxContainer.new()
+	storage_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	storage_container.add_theme_constant_override("separation", 10)
+	scroll.add_child(storage_container)
+
+func _sell_from_storage(crop_id: String, requested_kg: float) -> void:
+	var removed_kg: float = InventoryManager.remove_crop(crop_id, requested_kg)
+	if removed_kg <= 0.0:
+		return
+
+	var gross: int = GameManager.calculate_crop_sale_value(crop_id, removed_kg)
+	var sale: Dictionary = GameManager.process_sale_finances(gross)
+	var debt_paid: int = int(sale.get("subsidy_paid", 0)) + int(sale.get("loan_paid", 0))
+	print("[FarmHQ] Продано %.0f кг %s: валовая выручка %d, долг -%d, в казну +%d" % [
+		removed_kg,
+		crop_id,
+		gross,
+		debt_paid,
+		int(sale.get("net_coins", 0))
+	])
+	_update_ui()
+
+func _refresh_storage_ui() -> void:
+	if storage_container == null:
+		return
+
+	for child in storage_container.get_children():
+		child.queue_free()
+
+	if not InventoryManager.initialized:
+		var loading: Label = Label.new()
+		loading.text = "🏚 Склад загружается..."
+		storage_container.add_child(loading)
+		return
+
+	if GameManager.has_barn:
+		InventoryManager.ensure_minimum_level(2)
+
+	var capacity: float = InventoryManager.get_capacity()
+	var total: float = InventoryManager.get_total_stock()
+
+	var title: Label = Label.new()
+	title.add_theme_font_size_override("font_size", 16)
+	title.text = "🏚 Склад урожая — уровень %d/%d" % [InventoryManager.storage_level, InventoryManager.MAX_STORAGE_LEVEL]
+	storage_container.add_child(title)
+
+	var capacity_row: HBoxContainer = HBoxContainer.new()
+	capacity_row.add_theme_constant_override("separation", 8)
+	storage_container.add_child(capacity_row)
+
+	var capacity_bar: ProgressBar = ProgressBar.new()
+	capacity_bar.min_value = 0.0
+	capacity_bar.max_value = max(1.0, capacity)
+	capacity_bar.value = total
+	capacity_bar.show_percentage = false
+	capacity_bar.custom_minimum_size = Vector2(280, 20)
+	capacity_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	capacity_row.add_child(capacity_bar)
+
+	var capacity_label: Label = Label.new()
+	capacity_label.text = "%.0f / %.0f кг" % [total, capacity]
+	capacity_row.add_child(capacity_label)
+
+	var auto_sell: CheckBox = CheckBox.new()
+	auto_sell.text = "Автопродажа после уборки (совместимый режим)"
+	auto_sell.set_pressed_no_signal(InventoryManager.auto_sell_on_harvest)
+	auto_sell.tooltip_text = "Если выключить, урожай остаётся на складе. При переполнении излишек продаётся автоматически за 70% цены."
+	auto_sell.toggled.connect(func(enabled: bool):
+		InventoryManager.set_auto_sell(enabled)
+		_refresh_storage_ui()
+	)
+	storage_container.add_child(auto_sell)
+
+	var upgrade_row: HBoxContainer = HBoxContainer.new()
+	storage_container.add_child(upgrade_row)
+
+	var upgrade_info: Label = Label.new()
+	upgrade_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if InventoryManager.storage_level == 1 and not GameManager.has_barn:
+		upgrade_info.text = "Для перехода к складу 1000 кг постройте Большой амбар во вкладке «Улучшения»."
+	else:
+		upgrade_info.text = "Расширение склада увеличивает запас для будущей торговли на рынке."
+	upgrade_row.add_child(upgrade_info)
+
+	var upgrade_btn: Button = Button.new()
+	if not InventoryManager.can_upgrade():
+		upgrade_btn.text = "Максимальная ёмкость ✔"
+		upgrade_btn.disabled = true
+	elif InventoryManager.storage_level == 1 and not GameManager.has_barn:
+		upgrade_btn.text = "Требуется амбар"
+		upgrade_btn.disabled = true
+	else:
+		var cost: int = InventoryManager.get_next_upgrade_cost()
+		var next_capacity: float = float(InventoryManager.CAPACITY_BY_LEVEL.get(InventoryManager.storage_level + 1, capacity))
+		upgrade_btn.text = "Расширить до %.0f кг (%d 🪙)" % [next_capacity, cost]
+		upgrade_btn.disabled = GameManager.coins < cost
+		upgrade_btn.pressed.connect(func():
+			var upgrade_cost: int = InventoryManager.get_next_upgrade_cost()
+			if upgrade_cost > 0 and GameManager.spend_coins(upgrade_cost):
+				InventoryManager.upgrade_capacity()
+				_update_ui()
+		)
+	upgrade_row.add_child(upgrade_btn)
+
+	var separator: HSeparator = HSeparator.new()
+	storage_container.add_child(separator)
+
+	for crop_id in InventoryManager.CROP_IDS:
+		var crop_data: Dictionary = GameManager.CROPS.get(crop_id, {})
+		var crop_name: String = str(crop_data.get("name", crop_id))
+		var amount: float = InventoryManager.get_stock(crop_id)
+		var price_100: int = GameManager.calculate_crop_sale_value(crop_id, 100.0)
+
+		var panel: PanelContainer = PanelContainer.new()
+		var row: HBoxContainer = HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		panel.add_child(row)
+
+		var info: Label = Label.new()
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		info.text = "%s: %.0f кг | текущая фиксированная цена: %d 🪙 / 100 кг" % [crop_name, amount, price_100]
+		row.add_child(info)
+
+		var sell_100: Button = Button.new()
+		sell_100.text = "Продать 100 кг"
+		sell_100.disabled = amount <= 0.0
+		var cid_100: String = crop_id
+		sell_100.pressed.connect(func(target_crop: String = cid_100):
+			_sell_from_storage(target_crop, 100.0)
+		)
+		row.add_child(sell_100)
+
+		var sell_all: Button = Button.new()
+		sell_all.text = "Продать всё"
+		sell_all.disabled = amount <= 0.0
+		var cid_all: String = crop_id
+		sell_all.pressed.connect(func(target_crop: String = cid_all):
+			_sell_from_storage(target_crop, InventoryManager.get_stock(target_crop))
+		)
+		row.add_child(sell_all)
+
+		storage_container.add_child(panel)
+
+	var overflow_note: Label = Label.new()
+	overflow_note.text = "Всего принято на склад: %.0f кг | Через переполнение прошло: %.0f кг" % [
+		InventoryManager.total_harvest_stored_kg,
+		InventoryManager.total_overflow_kg
+	]
+	storage_container.add_child(overflow_note)
+
 func _setup_repair_buttons() -> void:
 	var do_repair = func():
 		repair_requested.emit()
@@ -397,6 +569,7 @@ func _setup_repair_buttons() -> void:
 
 func _update_ui() -> void:
 	_refresh_contracts_ui()
+	_refresh_storage_ui()
 
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins
@@ -723,6 +896,7 @@ func _setup_upgrades_tab() -> void:
 	btn_buy_barn.pressed.connect(func():
 		if ProgressionManager.can_access_feature("barn") and GameManager.spend_coins(450):
 			GameManager.has_barn = true
+			InventoryManager.ensure_minimum_level(2)
 			GameManager.save_to_settings()
 			_update_ui()
 	)
