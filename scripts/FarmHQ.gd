@@ -325,10 +325,16 @@ func _refresh_contracts_ui() -> void:
 	if contracts_container == null:
 		return
 
-	ContractManager.refresh_board(false)
-
 	for child in contracts_container.get_children():
 		child.queue_free()
+
+	if not ContractManager.initialized:
+		var loading: Label = Label.new()
+		loading.text = "📋 Контрактный центр загружается..."
+		contracts_container.add_child(loading)
+		return
+
+	ContractManager.refresh_board(false)
 
 	var summary: Label = Label.new()
 	summary.add_theme_font_size_override("font_size", 16)
