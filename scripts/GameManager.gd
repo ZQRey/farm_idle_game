@@ -2,6 +2,7 @@ class_name GameManager
 extends RefCounted
 
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
+const WindowManager = preload("res://scripts/WindowManager.gd")
 
 signal bankruptcy_declared
 signal season_changed(new_season: Season, season_name: String)
@@ -164,6 +165,15 @@ static func get_max_scarecrows() -> int:
 static func get_total_debt() -> int:
 	return subsidy_debt + loan_debt
 
+## Множитель прибыли от количества используемых мониторов:
+## Если 2 монитора используются для посева (все мониторы) - x2, если 3 - x3 и т.д.
+static func get_monitor_profit_multiplier() -> float:
+	var screen_idx: int = SettingsManager.get_screen_index()
+	if screen_idx == WindowManager.SCREEN_ALL_MONITORS:
+		var count: int = DisplayServer.get_screen_count()
+		return float(max(1, count))
+	return 1.0
+
 # ==============================================================================
 # СЕЗОНЫ И РЫНОЧНЫЕ ЦЕНЫ
 # ==============================================================================
@@ -228,12 +238,15 @@ static func init_from_settings() -> void:
 	greenhouse_condition = float(SettingsManager.config.get_value("durability", "greenhouse_condition", 100.0))
 
 	last_volunteer_timestamp = int(SettingsManager.config.get_value("volunteers", "last_timestamp", 0))
+	is_volunteers_active = bool(SettingsManager.config.get_value("volunteers", "is_active", false))
+	volunteer_timer = float(SettingsManager.config.get_value("volunteers", "timer", 0.0))
+
 	greenhouse_count = int(SettingsManager.config.get_value("greenhouses", "count", 0))
 	greenhouse_crop = str(SettingsManager.config.get_value("greenhouses", "crop", "bananas"))
 
 	subsidy_debt = int(SettingsManager.config.get_value("finances", "subsidy_debt", 0))
 	loan_debt = int(SettingsManager.config.get_value("finances", "loan_debt", 0))
-	total_bankruptcies = int(SettingsManager.config.get_value("finances", "total_bankruptcies", 0))
+	current_season = int(SettingsManager.config.get_value("game", "current_season", int(Season.SPRING))) as Season
 
 	var unlocked_crops = SettingsManager.config.get_value("game", "unlocked_crops", ["wheat"])
 	for crop_id in unlocked_crops:
@@ -271,8 +284,12 @@ static func save_to_settings() -> void:
 	SettingsManager.config.set_value("durability", "greenhouse_condition", greenhouse_condition)
 
 	SettingsManager.config.set_value("volunteers", "last_timestamp", last_volunteer_timestamp)
+	SettingsManager.config.set_value("volunteers", "is_active", is_volunteers_active)
+	SettingsManager.config.set_value("volunteers", "timer", volunteer_timer)
+
 	SettingsManager.config.set_value("greenhouses", "count", greenhouse_count)
 	SettingsManager.config.set_value("greenhouses", "crop", greenhouse_crop)
+	SettingsManager.config.set_value("game", "current_season", int(current_season))
 
 	SettingsManager.config.set_value("finances", "subsidy_debt", subsidy_debt)
 	SettingsManager.config.set_value("finances", "loan_debt", loan_debt)
@@ -569,5 +586,10 @@ static func declare_bankruptcy() -> void:
 	is_repairing = false
 	is_strike_active = false
 	is_police_active = false
+	current_season = Season.SPRING
+
+	# Сброс сохраненных состояний поля и событий
+	SettingsManager.config.set_value("field_state", "has_saved_state", false)
+	SettingsManager.config.set_value("event_state", "has_saved_state", false)
 
 	save_to_settings()

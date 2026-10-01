@@ -12,16 +12,16 @@ static func setup_companion_window(window: Window, screen_index: int = -999) -> 
 		# По умолчанию берем primary экран или сохраненный
 		screen_index = SettingsManager.get_screen_index()
 
-	# 1. Свойства окна в Godot
+	# 1. Свойства окна в Godot (фоновое положение как обои)
 	window.transparent_bg = true
 	window.borderless = true
-	window.always_on_top = true
+	window.always_on_top = false
 	window.unfocusable = true
 
 	# 2. Флаги окна через DisplayServer
 	var main_win_id: int = DisplayServer.MAIN_WINDOW_ID
 	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, true, main_win_id)
-	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_ALWAYS_ON_TOP, true, main_win_id)
+	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_ALWAYS_ON_TOP, false, main_win_id)
 	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_TRANSPARENT, true, main_win_id)
 	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_NO_FOCUS, true, main_win_id)
 
@@ -73,10 +73,11 @@ static func apply_screen(window: Window, screen_index: int) -> void:
 	DisplayServer.window_set_size(target_size, main_win_id)
 	DisplayServer.window_set_position(target_pos, main_win_id)
 
-	# Настраиваем прокликиваемость:
-	# Нижняя часть (земля/техника, Y от 60 до 120) принимает клики,
-	# а верхняя прозрачная часть (Y от 0 до 60) пропускает клики на рабочий стол!
+	# Настраиваем прокликиваемость: сброс маски обрезки SetWindowRgn
 	setup_mouse_passthrough(target_size.x, target_size.y, main_win_id)
+
+	# Применяем системные стили фонового окна (HWND_BOTTOM + WS_EX_TRANSPARENT)
+	apply_desktop_styles()
 
 	print("[WindowManager] Window positioned at: ", target_pos, " size: ", target_size, " (screen_index: ", screen_index, ")")
 
@@ -91,13 +92,14 @@ static func setup_mouse_passthrough(_width: int, _height: int, window_id: int = 
 static func get_monitor_options() -> Array[Dictionary]:
 	var list: Array[Dictionary] = []
 	
+	var count: int = DisplayServer.get_screen_count()
+	var bonus_str: String = " (Прибыль x%d 💰)" % count if count >= 2 else ""
+
 	# Опция "Все мониторы одновременно"
 	list.append({
 		"id": SCREEN_ALL_MONITORS,
-		"title": "🌐 Все мониторы одновременно (Сплошная полоса)"
+		"title": "🌐 Все мониторы одновременно%s" % bonus_str
 	})
-
-	var count: int = DisplayServer.get_screen_count()
 	var primary: int = DisplayServer.get_primary_screen()
 
 	for i in range(count):
@@ -109,3 +111,20 @@ static func get_monitor_options() -> Array[Dictionary]:
 		})
 
 	return list
+
+
+## Применяет через Win32 API фоновый Z-порядок (HWND_BOTTOM) и прозрачность для мыши (WS_EX_TRANSPARENT)
+static func apply_desktop_styles() -> void:
+	if OS.get_name() != "Windows":
+		return
+	var pid: int = OS.get_process_id()
+	var script_path: String = ProjectSettings.globalize_path("res://tools/window_helper.ps1")
+	if FileAccess.file_exists(script_path):
+		var args: PackedStringArray = [
+			"-NoProfile",
+			"-WindowStyle", "Hidden",
+			"-ExecutionPolicy", "Bypass",
+			"-File", script_path,
+			"-ProcessId", str(pid)
+		]
+		OS.create_process("powershell.exe", args)

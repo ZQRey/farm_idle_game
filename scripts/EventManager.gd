@@ -4,6 +4,7 @@ extends Node
 const GameManager = preload("res://scripts/GameManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const AssetGenerator = preload("res://tools/AssetGenerator.gd")
+const SettingsManager = preload("res://scripts/SettingsManager.gd")
 
 enum Weather {
 	CLEAR, # 0. Ясно
@@ -62,6 +63,7 @@ var police_btn_bribe: Button
 
 func _ready() -> void:
 	_create_crisis_visuals()
+	restore_event_state()
 
 func _create_crisis_visuals() -> void:
 	var tex_crisis: Texture2D = AssetGenerator.get_texture("crisis_objects.png")
@@ -198,32 +200,35 @@ func _apply_weather_effects() -> void:
 		GameManager.is_stuck_in_mud = false
 
 	# Настройка погодных частиц
-	var wp: CPUParticles2D = field_fsm.particles_weather
+	var wp: CPUParticles2D = field_fsm.particles_weather if field_fsm != null else null
 
 	match current_weather:
 		Weather.CLEAR:
 			field_fsm.weather_speed_mod = 1.0
-			wp.emitting = false
+			if wp != null:
+				wp.emitting = false
 
 		Weather.RAIN:
 			field_fsm.weather_speed_mod = 0.55 # -45% к скорости техники и сева
-			wp.emitting = true
-			wp.amount = 80
-			wp.color = Color("5fcde4")
-			wp.direction = Vector2(-0.2, 1.0)
-			wp.initial_velocity_min = 250.0
-			wp.initial_velocity_max = 350.0
+			if wp != null:
+				wp.emitting = true
+				wp.amount = 80
+				wp.color = Color("5fcde4")
+				wp.direction = Vector2(-0.2, 1.0)
+				wp.initial_velocity_min = 250.0
+				wp.initial_velocity_max = 350.0
 			# Шанс застрять в грязи во время дождя
 			if randf() < 0.35 and not field_fsm.is_stuck_in_mud:
 				_trigger_mud_stuck()
 
 		Weather.HAIL:
-			wp.emitting = true
-			wp.amount = 50
-			wp.color = Color("cbdbfc")
-			wp.direction = Vector2(-0.3, 1.0)
-			wp.initial_velocity_min = 350.0
-			wp.initial_velocity_max = 450.0
+			if wp != null:
+				wp.emitting = true
+				wp.amount = 50
+				wp.color = Color("cbdbfc")
+				wp.direction = Vector2(-0.3, 1.0)
+				wp.initial_velocity_min = 350.0
+				wp.initial_velocity_max = 450.0
 			# Если нет навеса — техника и люди получают урон (-55% к скорости)
 			if GameManager.canopy_count == 0:
 				field_fsm.weather_speed_mod = 0.45
@@ -234,26 +239,29 @@ func _apply_weather_effects() -> void:
 
 		Weather.SNOW:
 			field_fsm.weather_speed_mod = 0.70 # -30% к скорости
-			wp.emitting = true
-			wp.amount = 45
-			wp.color = Color("ffffff")
-			wp.direction = Vector2(-0.4, 0.6)
-			wp.initial_velocity_min = 40.0
-			wp.initial_velocity_max = 80.0
+			if wp != null:
+				wp.emitting = true
+				wp.amount = 45
+				wp.color = Color("ffffff")
+				wp.direction = Vector2(-0.4, 0.6)
+				wp.initial_velocity_min = 40.0
+				wp.initial_velocity_max = 80.0
 
 		Weather.WIND:
 			field_fsm.weather_speed_mod = 0.50 # -50% к скорости сева
-			wp.emitting = true
-			wp.amount = 35
-			wp.color = Color("8ab060")
-			wp.direction = Vector2(1.0, 0.1)
-			wp.initial_velocity_min = 200.0
-			wp.initial_velocity_max = 350.0
+			if wp != null:
+				wp.emitting = true
+				wp.amount = 35
+				wp.color = Color("8ab060")
+				wp.direction = Vector2(1.0, 0.1)
+				wp.initial_velocity_min = 200.0
+				wp.initial_velocity_max = 350.0
 			print("[EventManager] 💨 Сильный порывистый ветер затрудняет работу! (-50% скорости)")
 
 		Weather.NIGHT:
 			field_fsm.weather_speed_mod = 0.0
-			wp.emitting = false
+			if wp != null:
+				wp.emitting = false
 			print("[EventManager] 🌙 Наступила ночь. Рабочие и техника греются у костра.")
 
 	var w_name: String = get_weather_name()
@@ -568,4 +576,91 @@ func reset_all_events() -> void:
 	current_weather = Weather.CLEAR
 	weather_timer = 0.0
 	weather_changed.emit(Weather.CLEAR, "Ясно ☀️")
+
+
+# ==============================================================================
+# СОХРАНЕНИЕ И ВОССТАНОВЛЕНИЕ СОСТОЯНИЯ СОБЫТИЙ
+# ==============================================================================
+func save_event_state() -> void:
+	SettingsManager.config.set_value("event_state", "has_saved_state", true)
+	SettingsManager.config.set_value("event_state", "current_weather", int(current_weather))
+	SettingsManager.config.set_value("event_state", "weather_timer", weather_timer)
+	SettingsManager.config.set_value("event_state", "weather_duration", weather_duration)
+	SettingsManager.config.set_value("event_state", "season_timer", season_timer)
+	SettingsManager.config.set_value("event_state", "is_strike_active", is_strike_active)
+	SettingsManager.config.set_value("event_state", "strike_timer", strike_timer)
+	SettingsManager.config.set_value("event_state", "is_breakdown_active", is_breakdown_active)
+	SettingsManager.config.set_value("event_state", "is_repairing", is_repairing)
+	SettingsManager.config.set_value("event_state", "repair_timer", repair_timer)
+	SettingsManager.config.set_value("event_state", "is_police_active", is_police_active)
+	SettingsManager.config.set_value("event_state", "police_timer", police_timer)
+	SettingsManager.save_settings()
+
+func restore_event_state() -> bool:
+	if not bool(SettingsManager.config.get_value("event_state", "has_saved_state", false)):
+		return false
+
+	current_weather = int(SettingsManager.config.get_value("event_state", "current_weather", int(Weather.CLEAR))) as Weather
+	weather_timer = float(SettingsManager.config.get_value("event_state", "weather_timer", 0.0))
+	weather_duration = float(SettingsManager.config.get_value("event_state", "weather_duration", 40.0))
+	season_timer = float(SettingsManager.config.get_value("event_state", "season_timer", 0.0))
+
+	# Применяем погоду к полю и трею
+	_apply_weather_effects()
+
+	# Восстановление забастовки
+	is_strike_active = bool(SettingsManager.config.get_value("event_state", "is_strike_active", false))
+	strike_timer = float(SettingsManager.config.get_value("event_state", "strike_timer", 0.0))
+	if is_strike_active and not GameManager.has_seeder_tractor:
+		GameManager.is_strike_active = true
+		if field_fsm != null:
+			field_fsm.is_strike_active = true
+			if field_fsm.seeder_workers.size() > 0:
+				var lead = field_fsm.seeder_workers[0]
+				if strike_poster != null:
+					strike_poster.visible = true
+					strike_poster.position = Vector2(lead.position.x + 10, lead.position.y - 18)
+				if strike_button != null:
+					strike_button.visible = true
+					strike_button.position = Vector2(lead.position.x - 20, FieldFSM.GROUND_Y - 56.0)
+		strike_started.emit()
+
+	# Восстановление поломки и ремонта
+	is_breakdown_active = bool(SettingsManager.config.get_value("event_state", "is_breakdown_active", false))
+	is_repairing = bool(SettingsManager.config.get_value("event_state", "is_repairing", false))
+	repair_timer = float(SettingsManager.config.get_value("event_state", "repair_timer", 0.0))
+	if is_breakdown_active:
+		GameManager.is_broken_down = true
+		GameManager.is_repairing = is_repairing
+		if field_fsm != null:
+			field_fsm.is_breakdown_active = true
+			var vpos = field_fsm.vehicle_sprite.position if field_fsm.vehicle_sprite != null else Vector2(200.0, FieldFSM.GROUND_Y - 32.0)
+			breakdown_started.emit(vpos)
+		if is_repairing and repair_pickup != null:
+			repair_pickup.visible = true
+			repair_pickup.position = Vector2(field_fsm.vehicle_x - 45.0 if field_fsm != null else 100.0, FieldFSM.GROUND_Y - 32.0)
+
+	# Восстановление полиции
+	is_police_active = bool(SettingsManager.config.get_value("event_state", "is_police_active", false))
+	police_timer = float(SettingsManager.config.get_value("event_state", "police_timer", 0.0))
+	if is_police_active:
+		GameManager.is_police_active = true
+		if field_fsm != null:
+			var target_car_x: float = clamp(field_fsm.vehicle_x + 80.0, 160.0, field_fsm.screen_width - 160.0)
+			if police_car != null:
+				police_car.visible = true
+				police_car.position = Vector2(target_car_x, FieldFSM.GROUND_Y - 32.0)
+			if police_officer != null:
+				police_officer.visible = true
+				police_officer.position = Vector2(target_car_x - 26.0, FieldFSM.GROUND_Y - 32.0)
+			if police_btn_fine != null:
+				police_btn_fine.visible = true
+				police_btn_fine.position = Vector2(target_car_x - 70.0, FieldFSM.GROUND_Y - 70.0)
+			if police_btn_bribe != null:
+				police_btn_bribe.visible = true
+				police_btn_bribe.position = Vector2(target_car_x + 30.0, FieldFSM.GROUND_Y - 70.0)
+		police_arrived.emit()
+
+	print("[EventManager] Состояние событий успешно восстановлено (погода: ", get_weather_name(), ")")
+	return true
 

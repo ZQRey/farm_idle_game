@@ -49,6 +49,7 @@ func _ready() -> void:
 	tray_manager.call_mechanic_requested.connect(_on_call_mechanic)
 	tray_manager.police_fine_requested.connect(_on_police_fine)
 	tray_manager.police_bribe_requested.connect(_on_police_bribe)
+	tray_manager.quit_requested.connect(_on_quit_requested)
 
 	# 7. Подключение сигналов окна «Штаб фермы»
 	farm_hq.monitor_selected.connect(_on_monitor_changed)
@@ -89,6 +90,12 @@ func _ready() -> void:
 		tray_manager.is_police_active = false
 		farm_hq._update_ui()
 	)
+	# 9. Таймер периодического автосохранения каждые 10 секунд
+	var autosave_timer: Timer = Timer.new()
+	autosave_timer.wait_time = 10.0
+	autosave_timer.autostart = true
+	autosave_timer.timeout.connect(save_all_state)
+	add_child(autosave_timer)
 
 	print("[Main] Farm Idle Companion fully operational!")
 
@@ -159,4 +166,19 @@ func _on_police_fine() -> void:
 func _on_police_bribe() -> void:
 	event_manager.resolve_police_bribe()
 	farm_hq._update_ui()
+
+func save_all_state() -> void:
+	GameManager.save_to_settings()
+	if field != null:
+		field.save_field_state()
+	if event_manager != null:
+		event_manager.save_event_state()
+	print("[Main] Текущее состояние игры успешно сохранено.")
+
+func _on_quit_requested() -> void:
+	save_all_state()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_PREDELETE:
+		save_all_state()
 

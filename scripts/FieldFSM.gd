@@ -108,8 +108,9 @@ func _ready() -> void:
 	_create_particles()
 	_create_visual_nodes()
 	
-	# Запуск первого цикла
-	change_state(State.PLOWING)
+	# Восстанавливаем сохраненное состояние или запускаем новый цикл
+	if not restore_field_state():
+		change_state(State.PLOWING)
 
 func _update_screen_bounds() -> void:
 	var screen_idx: int = SettingsManager.get_screen_index()
@@ -127,10 +128,16 @@ func _update_screen_bounds() -> void:
 		screen_width = max(rect.size.x, 800)
 
 	segment_count = int(ceil(float(screen_width) / float(TILE_SIZE))) + 1
-	soil_segments.resize(segment_count)
-	soil_segments.fill(0)
-	crop_stages.resize(segment_count)
-	crop_stages.fill(-1)
+	if soil_segments.size() != segment_count:
+		var old_size: int = soil_segments.size()
+		soil_segments.resize(segment_count)
+		for i in range(old_size, segment_count):
+			soil_segments[i] = 0
+	if crop_stages.size() != segment_count:
+		var old_size: int = crop_stages.size()
+		crop_stages.resize(segment_count)
+		for i in range(old_size, segment_count):
+			crop_stages[i] = -1
 
 func _load_textures() -> void:
 	tex_soil = AssetGenerator.get_texture("soil_tiles.png")
@@ -955,6 +962,12 @@ func _finish_hauling_cycle() -> void:
 	elif season_mult < 0.95:
 		bonus_text += " [Осень -%d%%]" % int((1.0 - season_mult) * 100.0)
 
+	# Множитель прибыли от количества используемых мониторов (x2 для 2 мониторов, x3 для 3 и т.д.)
+	var mon_mult: float = GameManager.get_monitor_profit_multiplier()
+	if mon_mult > 1.0:
+		final_reward = int(final_reward * mon_mult)
+		bonus_text += " [x%d Монитора]" % int(mon_mult)
+
 	# Обработка финансов и выплат по долгам
 	var fin_res: Dictionary = GameManager.process_harvest_finances(final_reward)
 	GameManager.total_harvested += 1
@@ -1181,3 +1194,156 @@ func _draw_decorations() -> void:
 		var dest_y: float = GROUND_Y - 26.0 if src_r.size.y == 16 else (GROUND_Y - 46.0)
 		draw_texture_rect_region(tex_decorations, Rect2(x, dest_y, src_r.size.x * 1.6, src_r.size.y * 1.6), src_r)
 		x += width_step
+
+
+# ==============================================================================
+# СОХРАНЕНИЕ И ВОССТАНОВЛЕНИЕ СОСТОЯНИЯ ПОЛЯ
+# ==============================================================================
+func save_field_state() -> void:
+	SettingsManager.config.set_value("field_state", "has_saved_state", true)
+	SettingsManager.config.set_value("field_state", "current_state", int(current_state))
+	SettingsManager.config.set_value("field_state", "state_timer", state_timer)
+	SettingsManager.config.set_value("field_state", "vehicle_x", vehicle_x)
+	SettingsManager.config.set_value("field_state", "truck_fill_stage", truck_fill_stage)
+
+	var soil_arr: Array = []
+	for s in soil_segments:
+		soil_arr.append(int(s))
+	var crop_arr: Array = []
+	for c in crop_stages:
+		crop_arr.append(int(c))
+	SettingsManager.config.set_value("field_state", "soil_segments", soil_arr)
+	SettingsManager.config.set_value("field_state", "crop_stages", crop_arr)
+
+	SettingsManager.config.set_value("field_state", "greenhouse_timer", greenhouse_timer)
+	SettingsManager.config.set_value("field_state", "current_season", int(current_season))
+	SettingsManager.save_settings()
+
+func restore_field_state() -> bool:
+	if not bool(SettingsManager.config.get_value("field_state", "has_saved_state", false)):
+		return false
+
+	var saved_state_int: int = int(SettingsManager.config.get_value("field_state", "current_state", int(State.PLOWING)))
+	var saved_timer: float = float(SettingsManager.config.get_value("field_state", "state_timer", 0.0))
+	var saved_vx: float = float(SettingsManager.config.get_value("field_state", "vehicle_x", -80.0))
+	var saved_truck_fill: int = int(SettingsManager.config.get_value("field_state", "truck_fill_stage", 0))
+	var saved_gh_timer: float = float(SettingsManager.config.get_value("field_state", "greenhouse_timer", 0.0))
+	var saved_season: int = int(SettingsManager.config.get_value("field_state", "current_season", int(GameManager.current_season)))
+
+	var saved_soil = SettingsManager.config.get_value("field_state", "soil_segments", [])
+	var saved_crops = SettingsManager.config.get_value("field_state", "crop_stages", [])
+
+	_update_screen_bounds()
+
+	if saved_soil != null and saved_soil.size() > 0:
+		var fill_len: int = mini(saved_soil.size(), segment_count)
+		for i in range(fill_len):
+			soil_segments[i] = int(saved_soil[i])
+
+	if saved_crops != null and saved_crops.size() > 0:
+		var fill_len: int = mini(saved_crops.size(), segment_count)
+		for i in range(fill_len):
+			crop_stages[i] = int(saved_crops[i])
+
+	greenhouse_timer = saved_gh_timer
+	state_timer = saved_timer
+	truck_fill_stage = saved_truck_fill
+	vehicle_x = saved_vx
+	set_season(saved_season)
+
+	_resume_state_visuals(saved_state_int as State)
+	queue_redraw()
+	print("[FieldFSM] Состояние поля успешно восстановлено: ", State.keys()[saved_state_int], " (x=", vehicle_x, ")")
+	return true
+
+func _resume_state_visuals(target_state: State) -> void:
+	current_state = target_state
+	if particles_soil != null:
+		particles_soil.emitting = false
+	if particles_water != null:
+		particles_water.emitting = false
+	if particles_seed != null:
+		particles_seed.emitting = false
+	for w in seeder_workers:
+		w.visible = false
+
+	if vehicle_sprite == null:
+		return
+
+	match target_state:
+		State.IDLE:
+			change_state(State.PLOWING)
+		State.PLOWING:
+			vehicle_sprite.visible = true
+			if GameManager.has_heavy_tractor:
+				vehicle_sprite.texture = tex_tractor_v2
+				vehicle_sprite.hframes = 2
+				vehicle_sprite.frame = 0
+				vehicle_sprite.modulate = Color.WHITE
+				vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 40.0)
+			else:
+				vehicle_sprite.texture = tex_tractor
+				vehicle_sprite.hframes = 1
+				vehicle_sprite.frame = 0
+				vehicle_sprite.modulate = GameManager.tractor_color
+				vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
+			if particles_soil != null:
+				particles_soil.emitting = true
+				particles_soil.position = Vector2(vehicle_x + 10, GROUND_Y - 4.0)
+		State.SOWING:
+			if GameManager.has_seeder_tractor:
+				vehicle_sprite.visible = true
+				vehicle_sprite.texture = tex_tractor_seeder
+				vehicle_sprite.hframes = 1
+				vehicle_sprite.modulate = GameManager.tractor_color
+				vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
+				if particles_seed != null:
+					particles_seed.emitting = true
+					particles_seed.position = Vector2(vehicle_x + 16, GROUND_Y - 10.0)
+			else:
+				vehicle_sprite.visible = false
+				for i in range(seeder_workers.size()):
+					var w: Sprite2D = seeder_workers[i]
+					w.visible = true
+					w.flip_h = false
+					w.position = Vector2(vehicle_x - i * 36.0, GROUND_Y - 32.0)
+				if particles_seed != null:
+					particles_seed.emitting = true
+		State.WATERING:
+			vehicle_sprite.visible = true
+			vehicle_sprite.texture = tex_tanker
+			vehicle_sprite.hframes = 1
+			vehicle_sprite.modulate = Color.WHITE
+			vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
+			if particles_water != null:
+				particles_water.emitting = true
+				particles_water.position = Vector2(vehicle_x + 14, GROUND_Y - 12.0)
+		State.GROWING:
+			vehicle_sprite.visible = false
+		State.HARVESTING:
+			vehicle_sprite.visible = true
+			if GameManager.has_super_harvester:
+				vehicle_sprite.texture = tex_harvester_v2
+				vehicle_sprite.hframes = 4
+				vehicle_sprite.frame = 0
+				vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 48.0)
+			else:
+				vehicle_sprite.texture = tex_harvester
+				vehicle_sprite.hframes = 3
+				vehicle_sprite.frame = 0
+				vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 40.0)
+			vehicle_sprite.modulate = Color.WHITE
+			if particles_soil != null:
+				particles_soil.emitting = true
+				particles_soil.position = Vector2(vehicle_x + 16, GROUND_Y - 6.0)
+		State.HAULING:
+			vehicle_sprite.visible = true
+			if GameManager.has_road_train:
+				vehicle_sprite.texture = tex_truck_v2
+				vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 40.0)
+			else:
+				vehicle_sprite.texture = tex_truck
+				vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
+			vehicle_sprite.hframes = 4
+			vehicle_sprite.frame = clampi(truck_fill_stage, 0, 3)
+			vehicle_sprite.modulate = Color.WHITE
