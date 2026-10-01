@@ -353,6 +353,23 @@ func _process_night_camp(_delta: float) -> void:
 	for w in seeder_workers:
 		w.visible = false
 
+func set_weather(w_id: int) -> void:
+	current_weather_id = w_id
+	is_night_active = (w_id == 5)
+	match w_id:
+		0: # CLEAR
+			weather_speed_mod = 1.0
+		1: # RAIN
+			weather_speed_mod = 0.55 # -45% скорости техники и людей в дождь
+		2: # HAIL
+			weather_speed_mod = 0.45 if GameManager.canopy_count == 0 else 0.85
+		3: # SNOW
+			weather_speed_mod = 0.65
+		4: # WIND
+			weather_speed_mod = 0.60
+		5: # NIGHT
+			weather_speed_mod = 0.0
+
 # ------------------------------------------------------------------------------
 # ВЗАИМОДЕЙСТВИЕ С ВОРОНАМИ (ОНИ ПРИЛЕТАЮТ СВЕРХУ, ПУГАЮТСЯ СЕЯТЕЛЕЙ И УЛЕТАЮТ)
 # ------------------------------------------------------------------------------
@@ -545,6 +562,9 @@ func _start_sowing() -> void:
 		for i in range(seeder_workers.size()):
 			var w: Sprite2D = seeder_workers[i]
 			w.visible = true
+			w.flip_h = false
+			if w.has_meta("resume_x"):
+				w.remove_meta("resume_x")
 			w.position = Vector2(-40.0 - i * 36.0, GROUND_Y - 32.0)
 		particles_seed.emitting = true
 
@@ -563,28 +583,104 @@ func _process_sowing(delta: float, speed: float) -> void:
 			particles_seed.emitting = false
 			change_state(State.WATERING)
 	else:
-		var all_finished: bool = true
-		var lead_x: float = 0.0
-		for i in range(seeder_workers.size()):
-			var w: Sprite2D = seeder_workers[i]
-			w.position.x += speed * 0.7 * delta
-			w.frame = int(anim_timer * 5.0 + i) % 4
-			lead_x = max(lead_x, w.position.x)
+		var is_raining: bool = (current_weather_id == 1) # Weather.RAIN
 
-			var seg: int = int((w.position.x + 24.0) / float(TILE_SIZE))
-			if seg >= 0 and seg < segment_count:
-				crop_stages[seg] = 0
-
-			if w.position.x < screen_width + 40:
-				all_finished = false
-
-		particles_seed.position = Vector2(lead_x + 10, GROUND_Y - 10.0)
-
-		if all_finished:
-			for w in seeder_workers:
-				w.visible = false
+		if is_raining:
 			particles_seed.emitting = false
-			change_state(State.WATERING)
+			var run_speed: float = vehicle_speed * 1.5
+
+			if GameManager.canopy_count > 0:
+				# Сеятели бегут под ближайший навес
+				for i in range(seeder_workers.size()):
+					var w: Sprite2D = seeder_workers[i]
+					w.visible = true
+					if not w.has_meta("resume_x"):
+						w.set_meta("resume_x", w.position.x)
+
+					# Найти ближайший навес
+					var best_canopy_center: float = 240.0 + 28.0
+					var min_dist: float = 999999.0
+					for c in range(GameManager.canopy_count):
+						var cx: float = 240.0 + c * 400.0 + 28.0
+						var d: float = abs(w.position.x - cx)
+						if d < min_dist:
+							min_dist = d
+							best_canopy_center = cx
+
+					var target_x: float = best_canopy_center - 14.0 + i * 14.0
+					if abs(w.position.x - target_x) > 4.0:
+						var dir: float = sign(target_x - w.position.x)
+						w.position.x += dir * run_speed * delta
+						w.flip_h = (dir < 0)
+						w.frame = int(anim_timer * 9.0 + i) % 4
+					else:
+						w.position.x = target_x
+						w.flip_h = false
+						w.frame = 0 # Укрылись под навесом, стоят спокойно
+			else:
+				# Навеса нет — сеятели убегают с карты влево, пока дождь не закончится
+				for i in range(seeder_workers.size()):
+					var w: Sprite2D = seeder_workers[i]
+					if not w.has_meta("resume_x"):
+						w.set_meta("resume_x", w.position.x)
+
+					var target_x: float = -60.0 - i * 30.0
+					if w.position.x > target_x:
+						w.position.x -= run_speed * delta
+						w.flip_h = true
+						w.frame = int(anim_timer * 9.0 + i) % 4
+						if w.position.x <= -35.0:
+							w.visible = false
+					else:
+						w.position.x = target_x
+						w.visible = false
+		else:
+			# Дождь не идет: возвращение и нормальный сев
+			var all_finished: bool = true
+			var lead_x: float = 0.0
+			particles_seed.emitting = true
+
+			for i in range(seeder_workers.size()):
+				var w: Sprite2D = seeder_workers[i]
+				w.visible = true
+
+				# Если рабочий возвращается из укрытия на точку сева
+				if w.has_meta("resume_x"):
+					var res_x: float = float(w.get_meta("resume_x"))
+					if abs(w.position.x - res_x) > 6.0:
+						var dir: float = sign(res_x - w.position.x)
+						w.position.x += dir * vehicle_speed * 1.3 * delta
+						w.flip_h = (dir < 0)
+						w.frame = int(anim_timer * 8.0 + i) % 4
+						all_finished = false
+						lead_x = max(lead_x, w.position.x)
+						continue
+					else:
+						w.remove_meta("resume_x")
+						w.flip_h = false
+
+				w.flip_h = false
+				w.position.x += speed * 0.7 * delta
+				w.frame = int(anim_timer * 5.0 + i) % 4
+				lead_x = max(lead_x, w.position.x)
+
+				var seg: int = int((w.position.x + 24.0) / float(TILE_SIZE))
+				if seg >= 0 and seg < segment_count:
+					crop_stages[seg] = 0
+
+				if w.position.x < screen_width + 40:
+					all_finished = false
+
+			particles_seed.position = Vector2(lead_x + 10, GROUND_Y - 10.0)
+
+			if all_finished:
+				for w in seeder_workers:
+					w.visible = false
+					if w.has_meta("resume_x"):
+						w.remove_meta("resume_x")
+					w.flip_h = false
+				particles_seed.emitting = false
+				change_state(State.WATERING)
 
 # ------------------------------------------------------------------------------
 # 3. WATERING: Полив
@@ -630,7 +726,8 @@ func _start_growing() -> void:
 	state_timer = 0.0
 
 func _process_growing(delta: float) -> void:
-	state_timer += delta * weather_speed_mod
+	var growth_rate: float = 1.30 if current_weather_id == 1 else weather_speed_mod
+	state_timer += delta * growth_rate
 	var crop_data: Dictionary = GameManager.get_current_crop_data()
 	var total_time: float = float(crop_data.get("growth_time", 8.0))
 
@@ -755,6 +852,9 @@ func reset_field_to_start() -> void:
 	crop_stages.fill(-1)
 	for w in seeder_workers:
 		w.visible = false
+		w.flip_h = false
+		if w.has_meta("resume_x"):
+			w.remove_meta("resume_x")
 	for rw in resting_workers:
 		rw.visible = false
 	smoke_fire_sprite.visible = false

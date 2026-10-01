@@ -3,6 +3,7 @@ extends Node
 
 const WindowManager = preload("res://scripts/WindowManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
+const GameManager = preload("res://scripts/GameManager.gd")
 
 signal open_farm_hq_requested
 signal toggle_pause_requested
@@ -85,7 +86,11 @@ func _rebuild_context_menu() -> void:
 	if is_strike_active:
 		context_menu.add_item("🚨 Выплатить премию забастовщикам (50 🪙)", 300)
 	if is_breakdown_active:
-		context_menu.add_item("🔧 Вызвать аварийный ремонт (30 🪙)", 301)
+		if GameManager.is_repairing:
+			context_menu.add_item("🚑 Ремонт уже в пути...", 301)
+			context_menu.set_item_disabled(context_menu.get_item_index(301), true)
+		else:
+			context_menu.add_item("🔧 Вызвать аварийный ремонт (30 🪙)", 301)
 
 	context_menu.add_separator()
 	context_menu.add_item("🌤 Погода: " + weather_string, 110)

@@ -73,6 +73,8 @@ static var loan_debt: int = 0    # Долг по банковскому кред
 # Статус аварийного состояния
 static var is_broken_down: bool = false
 static var is_stuck_in_mud: bool = false
+static var is_repairing: bool = false
+static var is_strike_active: bool = false
 
 # Статистика сессии
 static var total_harvested: int = 0
@@ -258,5 +260,7 @@ static func declare_bankruptcy() -> void:
 
 	is_broken_down = false
 	is_stuck_in_mud = false
+	is_repairing = false
+	is_strike_active = false
 
 	save_to_settings()

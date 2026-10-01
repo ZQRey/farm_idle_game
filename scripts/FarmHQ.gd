@@ -10,10 +10,12 @@ signal graphics_mode_selected(mode: String)
 signal fps_selected(fps: int)
 signal tractor_color_changed(color: Color)
 signal repair_requested
+signal strike_resolve_requested
 signal bankruptcy_requested
 
 # UI ноды
 @onready var coins_label: Label = $VBox/Header/HBoxCoins/CoinsValue
+@onready var btn_resolve_strike: Button = $VBox/Header/BtnResolveStrike
 @onready var btn_emergency_repair: Button = $VBox/Header/BtnEmergencyRepair
 @onready var tab_container: TabContainer = $VBox/TabContainer
 
@@ -117,20 +119,48 @@ func _setup_repair_buttons() -> void:
 	btn_emergency_repair.pressed.connect(do_repair)
 	btn_stat_call_repair.pressed.connect(do_repair)
 
+	if btn_resolve_strike != null:
+		btn_resolve_strike.pressed.connect(func():
+			strike_resolve_requested.emit()
+			_update_ui()
+		)
+
 func _update_ui() -> void:
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins
 
+	# Кнопка урегулирования забастовки сеятелей
+	if btn_resolve_strike != null:
+		btn_resolve_strike.visible = GameManager.is_strike_active
+		btn_resolve_strike.disabled = (GameManager.coins < 50)
+		btn_resolve_strike.text = "🚨 Забастовка! Премия (50 🪙)"
+
 	# Статус поломки или застревания в грязи
 	var is_trouble: bool = GameManager.is_broken_down or GameManager.is_stuck_in_mud
+	if btn_emergency_repair == null or btn_stat_call_repair == null:
+		return
 	btn_emergency_repair.visible = is_trouble
-	btn_stat_call_repair.disabled = not is_trouble or (GameManager.coins < 30)
 
-	if GameManager.is_broken_down:
-		lbl_repair_status.text = "Статус: ⚙ ТЕХНИКА СЛОМАЛАСЬ! ВАЛИТ ДЫМ!"
-	elif GameManager.is_stuck_in_mud:
-		lbl_repair_status.text = "Статус: 🌧 ТЕХНИКА ЗАСТРЯЛА В ГРЯЗИ!"
+	if GameManager.is_repairing:
+		btn_emergency_repair.text = "🚑 Ремонт уже в пути..."
+		btn_emergency_repair.disabled = true
+		btn_stat_call_repair.text = "🚑 Ремонт уже в пути..."
+		btn_stat_call_repair.disabled = true
+		lbl_repair_status.text = "Статус: 🚑 Аварийная служба в пути..."
+	elif is_trouble:
+		btn_emergency_repair.text = "🔧 Вызвать ремонт (30 🪙)"
+		btn_emergency_repair.disabled = (GameManager.coins < 30)
+		btn_stat_call_repair.text = "🔧 Вызвать ремонтную бригаду (30 🪙)"
+		btn_stat_call_repair.disabled = (GameManager.coins < 30)
+		if GameManager.is_broken_down:
+			lbl_repair_status.text = "Статус: ⚙ ТЕХНИКА СЛОМАЛАСЬ! ВАЛИТ ДЫМ!"
+		elif GameManager.is_stuck_in_mud:
+			lbl_repair_status.text = "Статус: 🌧 ТЕХНИКА ЗАСТРЯЛА В ГРЯЗИ!"
 	else:
+		btn_emergency_repair.text = "🔧 Вызвать ремонт (30 🪙)"
+		btn_emergency_repair.disabled = true
+		btn_stat_call_repair.text = "🔧 Вызвать ремонтную бригаду (30 🪙)"
+		btn_stat_call_repair.disabled = true
 		lbl_repair_status.text = "Статус: Вся техника на ходу ✔"
 
 	# Мельница

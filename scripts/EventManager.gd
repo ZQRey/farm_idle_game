@@ -40,6 +40,7 @@ var repair_timer: float = 0.0
 
 # Визуальные объекты
 var strike_poster: Sprite2D
+var strike_button: Button
 var repair_pickup: Sprite2D
 
 func _ready() -> void:
@@ -55,16 +56,35 @@ func _create_crisis_visuals() -> void:
 	strike_poster.region_enabled = true
 	strike_poster.region_rect = Rect2(0, 0, 16, 16)
 	strike_poster.scale = Vector2(2.0, 2.0)
+	strike_poster.centered = false
 	strike_poster.visible = false
-	add_child(strike_poster)
 
-	# Пикап аварийной службы
+	# Кнопка урегулирования забастовки прямо на поле над рабочими
+	strike_button = Button.new()
+	strike_button.text = "🚨 Премия (50 🪙)"
+	strike_button.add_theme_color_override("font_color", Color("fbf236"))
+	strike_button.custom_minimum_size = Vector2(130, 26)
+	strike_button.visible = false
+	strike_button.pressed.connect(func():
+		resolve_strike(true)
+	)
+
+	# Пикап аварийной службы (ставим centered = false, чтобы колеса ехали ровно по земле)
 	repair_pickup = Sprite2D.new()
 	repair_pickup.texture = tex_pickup
 	repair_pickup.hframes = 2
 	repair_pickup.scale = Vector2(2.0, 2.0)
+	repair_pickup.centered = false
 	repair_pickup.visible = false
-	add_child(repair_pickup)
+
+	if field_fsm != null:
+		field_fsm.add_child(strike_poster)
+		field_fsm.add_child(strike_button)
+		field_fsm.add_child(repair_pickup)
+	else:
+		add_child(strike_poster)
+		add_child(strike_button)
+		add_child(repair_pickup)
 
 func _process(delta: float) -> void:
 	_process_weather(delta)
@@ -121,7 +141,7 @@ func _apply_weather_effects() -> void:
 			wp.emitting = false
 
 		Weather.RAIN:
-			field_fsm.weather_speed_mod = 1.20 # +20% к росту
+			field_fsm.weather_speed_mod = 0.55 # -45% к скорости техники и сева
 			wp.emitting = true
 			wp.amount = 80
 			wp.color = Color("5fcde4")
@@ -139,12 +159,12 @@ func _apply_weather_effects() -> void:
 			wp.direction = Vector2(-0.3, 1.0)
 			wp.initial_velocity_min = 350.0
 			wp.initial_velocity_max = 450.0
-			# Если нет навеса — техника и люди получают урон (-30% к скорости)
+			# Если нет навеса — техника и люди получают урон (-55% к скорости)
 			if GameManager.canopy_count == 0:
-				field_fsm.weather_speed_mod = 0.70
-				print("[EventManager] 🌨 Град бьет по технике и людям! Скорость -30% (постройте навес!)")
+				field_fsm.weather_speed_mod = 0.45
+				print("[EventManager] 🌨 Град бьет по технике и людям! Скорость -55% (постройте навес!)")
 			else:
-				field_fsm.weather_speed_mod = 1.0
+				field_fsm.weather_speed_mod = 0.85
 				print("[EventManager] ☂ Рабочие и техника укрылись под навесом от града!")
 
 		Weather.SNOW:
@@ -243,13 +263,18 @@ func trigger_strike() -> void:
 	if GameManager.has_seeder_tractor:
 		return
 	is_strike_active = true
+	GameManager.is_strike_active = true
 	strike_timer = 0.0
 	if field_fsm != null:
 		field_fsm.is_strike_active = true
 		if field_fsm.seeder_workers.size() > 0:
 			var lead = field_fsm.seeder_workers[0]
-			strike_poster.visible = true
-			strike_poster.position = Vector2(lead.position.x + 10, lead.position.y - 18)
+			if strike_poster != null:
+				strike_poster.visible = true
+				strike_poster.position = Vector2(lead.position.x + 10, lead.position.y - 18)
+			if strike_button != null:
+				strike_button.visible = true
+				strike_button.position = Vector2(lead.position.x - 20, FieldFSM.GROUND_Y - 56.0)
 	print("[EventManager] 🚨 СЕЯТЕЛИ ОБЪЯВИЛИ ЗАБАСТОВКУ!")
 	strike_started.emit()
 
@@ -257,10 +282,16 @@ func resolve_strike(by_player: bool = true) -> void:
 	if not is_strike_active:
 		return
 	if by_player:
-		GameManager.spend_coins(50)
+		if not GameManager.spend_coins(50):
+			print("[EventManager] Недостаточно монет для выплаты премии сеятелям!")
+			return
 		GameManager.total_strikes_resolved += 1
 	is_strike_active = false
-	strike_poster.visible = false
+	GameManager.is_strike_active = false
+	if strike_poster != null:
+		strike_poster.visible = false
+	if strike_button != null:
+		strike_button.visible = false
 	if field_fsm != null:
 		field_fsm.is_strike_active = false
 	print("[EventManager] Забастовка урегулирована!")
@@ -281,17 +312,19 @@ func trigger_breakdown() -> void:
 	GameManager.is_broken_down = true
 	if field_fsm != null:
 		field_fsm.is_breakdown_active = true
-		breakdown_started.emit(field_fsm.vehicle_sprite.position)
+		var vpos = field_fsm.vehicle_sprite.position if field_fsm.vehicle_sprite != null else Vector2.ZERO
+		breakdown_started.emit(vpos)
 	print("[EventManager] ⚙ ТЕХНИКА СЛОМАЛАСЬ! ВАЛИТ ЧЕРНЫЙ ДЫМ И ПЛАМЯ!")
 
 func call_mechanic() -> void:
-	if is_repairing:
+	if is_repairing or GameManager.is_repairing:
 		return
 	if not is_breakdown_active and not GameManager.is_stuck_in_mud:
 		return
 
 	if GameManager.spend_coins(30):
 		is_repairing = true
+		GameManager.is_repairing = true
 		repair_timer = 0.0
 		repair_pickup.visible = true
 		repair_pickup.position = Vector2(-70.0, FieldFSM.GROUND_Y - 32.0)
@@ -304,6 +337,7 @@ func _process_repair_service(delta: float) -> void:
 
 	# Движение пикапа к сломанной/застрявшей технике
 	var target_x: float = field_fsm.vehicle_x - 45.0
+	repair_pickup.position.y = FieldFSM.GROUND_Y - 32.0
 	if repair_pickup.position.x < target_x:
 		repair_pickup.position.x += 160.0 * delta
 		repair_pickup.frame = int(repair_timer * 8.0) % 2
@@ -312,6 +346,7 @@ func _process_repair_service(delta: float) -> void:
 		repair_pickup.frame = int(repair_timer * 10.0) % 2
 		if repair_timer >= 4.0:
 			is_repairing = false
+			GameManager.is_repairing = false
 			is_breakdown_active = false
 			GameManager.is_broken_down = false
 			field_fsm.is_breakdown_active = false
@@ -328,11 +363,16 @@ func _process_repair_service(delta: float) -> void:
 
 func reset_all_events() -> void:
 	is_strike_active = false
+	GameManager.is_strike_active = false
 	strike_timer = 0.0
 	if strike_poster != null:
 		strike_poster.visible = false
+	if strike_button != null:
+		strike_button.visible = false
 	is_breakdown_active = false
+	GameManager.is_broken_down = false
 	is_repairing = false
+	GameManager.is_repairing = false
 	repair_timer = 0.0
 	if repair_pickup != null:
 		repair_pickup.visible = false

@@ -54,6 +54,7 @@ func _ready() -> void:
 	farm_hq.tractor_color_changed.connect(_on_tractor_color_changed)
 	farm_hq.fps_selected.connect(_on_fps_changed)
 	farm_hq.repair_requested.connect(_on_call_mechanic)
+	farm_hq.strike_resolve_requested.connect(_on_resolve_strike)
 	farm_hq.bankruptcy_requested.connect(_on_bankruptcy_requested)
 
 	# 8. Подключение сигналов поля и событий
@@ -113,8 +114,10 @@ func _on_tractor_color_changed(color: Color) -> void:
 func _on_harvest_completed(_coins_earned: int) -> void:
 	farm_hq._update_ui()
 
-func _on_weather_changed(_w_enum: int, w_name: String) -> void:
+func _on_weather_changed(w_enum: int, w_name: String) -> void:
 	tray_manager.weather_string = w_name
+	if field != null:
+		field.set_weather(w_enum)
 
 func _on_resolve_strike() -> void:
 	event_manager.resolve_strike(true)
