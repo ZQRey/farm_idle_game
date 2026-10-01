@@ -5,7 +5,7 @@
 [node name="FarmHQ" type="Window"]
 title = "🌾 Штаб фермы - Управление и Магазин"
 initial_position = 2
-size = Vector2i(660, 560)
+size = Vector2i(720, 620)
 visible = false
 wrap_controls = true
 script = ExtResource("1_farmhq")
@@ -30,6 +30,25 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 18
 text = "🌾 Агрокомплекс «Урожай»"
+
+[node name="LblSeason" type="Label" parent="VBox/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.372549, 0.803922, 0.894118, 1)
+text = "🗓 Сезон: Весна 🌱 (+15% цены)"
+
+[node name="BtnResolvePoliceFine" type="Button" parent="VBox/Header"]
+visible = false
+custom_minimum_size = Vector2(160, 34)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.86, 0.98, 1)
+text = "📋 Штраф (80 🪙)"
+
+[node name="BtnResolvePoliceBribe" type="Button" parent="VBox/Header"]
+visible = false
+custom_minimum_size = Vector2(160, 34)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.984314, 0.94902, 0.211765, 1)
+text = "🤝 Взятка (10%)"
 
 [node name="BtnResolveStrike" type="Button" parent="VBox/Header"]
 visible = false
@@ -425,6 +444,38 @@ text = "Объявлено банкротств:"
 layout_mode = 2
 text = "0"
 
+[node name="StatSalariesLbl" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/Grid"]
+layout_mode = 2
+text = "Выплачено зарплат рабочим:"
+
+[node name="StatSalariesVal" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/Grid"]
+layout_mode = 2
+text = "0 🪙"
+
+[node name="StatFuelLbl" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/Grid"]
+layout_mode = 2
+text = "Затраты на бензин техники:"
+
+[node name="StatFuelVal" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/Grid"]
+layout_mode = 2
+text = "0 🪙"
+
+[node name="StatGreenhouseLbl" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/Grid"]
+layout_mode = 2
+text = "Доход с теплиц (экзотика):"
+
+[node name="StatGreenhouseVal" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/Grid"]
+layout_mode = 2
+text = "0 🪙"
+
+[node name="StatFinesLbl" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/Grid"]
+layout_mode = 2
+text = "Оплачено штрафов:"
+
+[node name="StatFinesVal" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/Grid"]
+layout_mode = 2
+text = "0 🪙"
+
 [node name="HSeparator" type="HSeparator" parent="VBox/TabContainer/Статистика/VBoxStats"]
 layout_mode = 2
 
@@ -566,6 +617,181 @@ layout_mode = 2
 size_flags_horizontal = 0
 theme_override_colors/font_color = Color(0.984314, 0.35, 0.35, 1)
 text = "🛑 Объявить себя банкротом (Начать сначала)"
+
+[node name="Производство и ТО" type="MarginContainer" parent="VBox/TabContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+metadata/_tab_index = 6
+
+[node name="ScrollProduction" type="ScrollContainer" parent="VBox/TabContainer/Производство и ТО"]
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="VBox/TabContainer/Производство и ТО/ScrollProduction"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="FuelSection" type="VBoxContainer" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/FuelSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "⛽ Топливная система (Бензин техники)"
+
+[node name="HBoxFuel" type="HBoxContainer" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/FuelSection"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="LblFuelLevel" type="Label" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/FuelSection/HBoxFuel"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Уровень топлива: 100.0 / 100 л"
+
+[node name="BtnRefuel20" type="Button" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/FuelSection/HBoxFuel"]
+custom_minimum_size = Vector2(180, 34)
+layout_mode = 2
+text = "Заправить 20 л (25 🪙)"
+
+[node name="BtnRefuelFull" type="Button" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/FuelSection/HBoxFuel"]
+custom_minimum_size = Vector2(150, 34)
+layout_mode = 2
+text = "Полный бак"
+
+[node name="CheckAutoRefuel" type="CheckBox" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/FuelSection"]
+layout_mode = 2
+button_pressed = true
+text = "Автоматическая дозаправка бензина при разгрузке урожая"
+
+[node name="HSep1" type="HSeparator" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox"]
+layout_mode = 2
+
+[node name="GreenhouseSection" type="VBoxContainer" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/GreenhouseSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "🏡 Теплицы (Круглогодичное выращивание экзотических культур)"
+
+[node name="Desc" type="Label" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/GreenhouseSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.75, 0.75, 1)
+text = "Теплицы стоят на поле и работают отдельно: приносят независимый урожай даже зимой!"
+
+[node name="HBoxGHBuy" type="HBoxContainer" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/GreenhouseSection"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="LblGHCount" type="Label" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/GreenhouseSection/HBoxGHBuy"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Построено теплиц: 0 / 2"
+
+[node name="BtnBuyGreenhouse" type="Button" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/GreenhouseSection/HBoxGHBuy"]
+custom_minimum_size = Vector2(210, 34)
+layout_mode = 2
+text = "Купить теплицу (700 🪙)"
+
+[node name="HBoxGHCrop" type="HBoxContainer" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/GreenhouseSection"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="LblCropChoice" type="Label" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/GreenhouseSection/HBoxGHCrop"]
+layout_mode = 2
+text = "Культура для теплиц:"
+
+[node name="OptGreenhouseCrop" type="OptionButton" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/GreenhouseSection/HBoxGHCrop"]
+custom_minimum_size = Vector2(240, 34)
+layout_mode = 2
+
+[node name="LblGreenhouseCropInfo" type="Label" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/GreenhouseSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.984314, 0.94902, 0.211765, 1)
+text = "🍌 Бананы: доход +90 🪙 (семена 30 🪙, цикл 20 сек)"
+
+[node name="HSep2" type="HSeparator" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox"]
+layout_mode = 2
+
+[node name="VolunteerSection" type="VBoxContainer" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/VolunteerSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "🤝 Волонтёрская помощь (Бесплатный призыв)"
+
+[node name="Desc" type="Label" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/VolunteerSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.75, 0.75, 1)
+text = "Волонтёры выходят на поле и ускоряют всю работу фермы на +70% на 3 минуты (не чаще 1 раза в час)."
+
+[node name="HBoxVol" type="HBoxContainer" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/VolunteerSection"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="LblVolunteerStatus" type="Label" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/VolunteerSection/HBoxVol"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Статус: Готовы прийти на помощь ✔"
+
+[node name="BtnCallVolunteers" type="Button" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/VolunteerSection/HBoxVol"]
+custom_minimum_size = Vector2(240, 36)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.984314, 0.94902, 0.211765, 1)
+text = "🤝 Призвать волонтёров"
+
+[node name="HSep3" type="HSeparator" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox"]
+layout_mode = 2
+
+[node name="DurabilitySection" type="VBoxContainer" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/DurabilitySection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "🛠 Износ и техническое обслуживание (Старение)"
+
+[node name="Desc" type="Label" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/DurabilitySection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.75, 0.75, 1)
+text = "Со временем техника и постройки изнашиваются. При износе ниже 40% падает скорость и эффективность!"
+
+[node name="HBoxMachinery" type="HBoxContainer" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/DurabilitySection"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="LblMachineryCond" type="Label" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/DurabilitySection/HBoxMachinery"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Состояние автопарка: 100% ✔"
+
+[node name="BtnRepairMachinery" type="Button" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/DurabilitySection/HBoxMachinery"]
+custom_minimum_size = Vector2(210, 34)
+layout_mode = 2
+text = "ТО автопарка (40 🪙)"
+
+[node name="HBoxBuildings" type="HBoxContainer" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/DurabilitySection"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="LblBuildingsCond" type="Label" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/DurabilitySection/HBoxBuildings"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Состояние построек: 100% ✔"
+
+[node name="BtnRepairBuildings" type="Button" parent="VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/DurabilitySection/HBoxBuildings"]
+custom_minimum_size = Vector2(210, 34)
+layout_mode = 2
+text = "Капремонт зданий (35 🪙)"
 
 [node name="BankruptcyDialog" type="ConfirmationDialog" parent="."]
 title = "Подтверждение банкротства"

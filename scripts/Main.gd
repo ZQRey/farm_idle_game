@@ -47,6 +47,8 @@ func _ready() -> void:
 	tray_manager.graphics_mode_changed.connect(_on_graphics_mode_changed)
 	tray_manager.resolve_strike_requested.connect(_on_resolve_strike)
 	tray_manager.call_mechanic_requested.connect(_on_call_mechanic)
+	tray_manager.police_fine_requested.connect(_on_police_fine)
+	tray_manager.police_bribe_requested.connect(_on_police_bribe)
 
 	# 7. Подключение сигналов окна «Штаб фермы»
 	farm_hq.monitor_selected.connect(_on_monitor_changed)
@@ -56,10 +58,13 @@ func _ready() -> void:
 	farm_hq.repair_requested.connect(_on_call_mechanic)
 	farm_hq.strike_resolve_requested.connect(_on_resolve_strike)
 	farm_hq.bankruptcy_requested.connect(_on_bankruptcy_requested)
+	farm_hq.police_fine_requested.connect(_on_police_fine)
+	farm_hq.police_bribe_requested.connect(_on_police_bribe)
 
 	# 8. Подключение сигналов поля и событий
 	field.harvest_completed.connect(_on_harvest_completed)
 	event_manager.weather_changed.connect(_on_weather_changed)
+	event_manager.season_changed.connect(_on_season_changed)
 	event_manager.strike_started.connect(func():
 		tray_manager.is_strike_active = true
 		farm_hq._update_ui()
@@ -74,6 +79,14 @@ func _ready() -> void:
 	)
 	event_manager.breakdown_resolved.connect(func():
 		tray_manager.is_breakdown_active = false
+		farm_hq._update_ui()
+	)
+	event_manager.police_arrived.connect(func():
+		tray_manager.is_police_active = true
+		farm_hq._update_ui()
+	)
+	event_manager.police_resolved.connect(func():
+		tray_manager.is_police_active = false
 		farm_hq._update_ui()
 	)
 
@@ -132,4 +145,18 @@ func _on_bankruptcy_requested() -> void:
 	event_manager.reset_all_events()
 	farm_hq._update_ui()
 	print("[Main] Ферма объявила банкротство: долги списаны, поле и техника сброшены!")
+
+func _on_season_changed(_season: GameManager.Season, season_name: String) -> void:
+	tray_manager.season_string = season_name
+	if field != null:
+		field.set_season(int(_season))
+	farm_hq._update_ui()
+
+func _on_police_fine() -> void:
+	event_manager.resolve_police_fine(false)
+	farm_hq._update_ui()
+
+func _on_police_bribe() -> void:
+	event_manager.resolve_police_bribe()
+	farm_hq._update_ui()
 

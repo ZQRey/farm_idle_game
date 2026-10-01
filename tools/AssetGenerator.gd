@@ -62,7 +62,7 @@ static func generate_all_assets(force: bool = false) -> void:
 	if not DirAccess.dir_exists_absolute(OUTPUT_DIR):
 		DirAccess.make_dir_recursive_absolute(OUTPUT_DIR)
 
-	var check_file: String = OUTPUT_DIR + "/tractor_v2.png"
+	var check_file: String = OUTPUT_DIR + "/greenhouse.png"
 	if not force and FileAccess.file_exists(check_file):
 		print("[AssetGenerator] Generated assets already exist.")
 		return
@@ -94,6 +94,16 @@ static func generate_all_assets(force: bool = false) -> void:
 	_generate_tractor_v2().save_png(OUTPUT_DIR + "/tractor_v2.png")
 	_generate_harvester_v2().save_png(OUTPUT_DIR + "/harvester_v2.png")
 	_generate_truck_v2().save_png(OUTPUT_DIR + "/truck_v2.png")
+
+	# Полиция, Теплицы, Сезоны, Волонтёры, Топливо
+	_generate_police_car().save_png(OUTPUT_DIR + "/police_car.png")
+	_generate_police_officer().save_png(OUTPUT_DIR + "/police_officer.png")
+	_generate_greenhouse().save_png(OUTPUT_DIR + "/greenhouse.png")
+	_generate_greenhouse_crops().save_png(OUTPUT_DIR + "/greenhouse_crops.png")
+	_generate_greenhouse_worker().save_png(OUTPUT_DIR + "/greenhouse_worker.png")
+	_generate_volunteer().save_png(OUTPUT_DIR + "/volunteer.png")
+	_generate_fuel_canister().save_png(OUTPUT_DIR + "/fuel_canister.png")
+	_generate_seasons_decorations().save_png(OUTPUT_DIR + "/seasons_decorations.png")
 
 	print("[AssetGenerator] All assets successfully generated into: ", OUTPUT_DIR)
 
@@ -1264,4 +1274,416 @@ static func _generate_truck_v2() -> Image:
 		_circle(img, ox + 42, 16, 1, DB32.light_grey)
 
 	return img
+
+
+# ==============================================================================
+# 20. ПАТРУЛЬНАЯ МАШИНА ПОЛИЦИИ (128x16, 4 кадра 32x16)
+# ==============================================================================
+static func _generate_police_car() -> Image:
+	var img: Image = Image.create(128, 16, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+
+	for frame in range(4):
+		var ox: int = frame * 32
+
+		# Белоснежный кузов седана
+		_rect(img, ox + 4, 6, 24, 6, DB32.pure_white)
+		_rect(img, ox + 11, 3, 11, 4, DB32.pure_white)  # крыша и стойки
+		_rect(img, ox + 13, 4, 7, 3, DB32.deep_blue)    # тонированное стекло
+
+		# Синяя патрульная полоса «ПОЛИЦИЯ»
+		_rect(img, ox + 4, 8, 24, 2, DB32.deep_blue)
+		_rect(img, ox + 14, 8, 4, 2, DB32.pure_white)   # герб / номер
+
+		# Бамперы и решетка
+		_rect(img, ox + 2, 9, 2, 3, DB32.charcoal)
+		_rect(img, ox + 28, 9, 2, 3, DB32.charcoal)
+
+		# Фары
+		_rect(img, ox + 27, 7, 2, 2, DB32.yellow)
+		_rect(img, ox + 3, 7, 1, 2, DB32.red)
+
+		# Красно-синяя проблесковая мигалка на крыше (стробоскоп)
+		_rect(img, ox + 14, 1, 5, 2, DB32.charcoal) # основание мигалки
+		match frame:
+			0:
+				_rect(img, ox + 14, 0, 2, 2, DB32.red)
+				_rect(img, ox + 17, 0, 2, 2, DB32.light_blue)
+				_safe_pixel(img, ox + 14, 0, DB32.pure_white) # вспышка красного
+			1:
+				_rect(img, ox + 14, 0, 2, 2, DB32.crimson)
+				_rect(img, ox + 17, 0, 2, 2, DB32.cyan)
+				_safe_pixel(img, ox + 18, 0, DB32.pure_white) # вспышка синего
+			2:
+				_rect(img, ox + 14, 0, 2, 2, DB32.cyan)
+				_rect(img, ox + 17, 0, 2, 2, DB32.crimson)
+				_safe_pixel(img, ox + 15, 0, DB32.pure_white)
+			3:
+				_rect(img, ox + 14, 0, 2, 2, DB32.light_blue)
+				_rect(img, ox + 17, 0, 2, 2, DB32.red)
+				_safe_pixel(img, ox + 17, 0, DB32.pure_white)
+
+		# Колеса (радиус 3, центр y=12, низ на y=15)
+		_circle(img, ox + 9, 12, 3, DB32.charcoal)
+		_circle(img, ox + 9, 12, 1, DB32.light_grey)
+		_circle(img, ox + 23, 12, 3, DB32.charcoal)
+		_circle(img, ox + 23, 12, 1, DB32.light_grey)
+
+	return img
+
+
+# ==============================================================================
+# 21. ОФИЦЕР ПОЛИЦИИ (64x16, 4 кадра 16x16)
+# ==============================================================================
+static func _generate_police_officer() -> Image:
+	var img: Image = Image.create(64, 16, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+
+	for frame in range(4):
+		var ox: int = frame * 16
+
+		# Фуражка с золотой кокардой
+		_rect(img, ox + 5, 1, 6, 2, DB32.deep_blue)
+		_rect(img, ox + 4, 3, 8, 1, DB32.charcoal)     # козырек
+		_safe_pixel(img, ox + 7, 2, DB32.gold)         # кокарда
+
+		# Лицо
+		_rect(img, ox + 6, 4, 4, 3, DB32.light_sand)
+		_safe_pixel(img, ox + 8, 4, DB32.charcoal)     # глаза
+
+		# Китель и погоны
+		_rect(img, ox + 5, 7, 6, 4, DB32.deep_blue)
+		_safe_pixel(img, ox + 5, 7, DB32.gold)         # погон
+		_safe_pixel(img, ox + 10, 7, DB32.gold)        # погон
+		_safe_pixel(img, ox + 7, 8, DB32.gold)         # жетон
+
+		# Ремень с кобурой
+		_rect(img, ox + 5, 11, 6, 1, DB32.charcoal)
+		_safe_pixel(img, ox + 8, 11, DB32.gold)        # пряжка
+
+		# Анимация рук и ног
+		match frame:
+			0:
+				# Стоит с планшетом / протоколом
+				_rect(img, ox + 3, 8, 2, 3, DB32.deep_blue)
+				_rect(img, ox + 9, 8, 4, 3, DB32.pure_white)  # планшет
+				_rect(img, ox + 6, 12, 2, 4, DB32.charcoal)    # ноги
+				_rect(img, ox + 9, 12, 2, 4, DB32.charcoal)
+			1:
+				# Шаг левой ногой
+				_rect(img, ox + 4, 8, 2, 3, DB32.deep_blue)
+				_rect(img, ox + 10, 8, 2, 3, DB32.deep_blue)
+				_rect(img, ox + 5, 12, 2, 4, DB32.charcoal)
+				_rect(img, ox + 9, 12, 3, 3, DB32.charcoal)
+			2:
+				# Шаг правой ногой
+				_rect(img, ox + 4, 8, 2, 3, DB32.deep_blue)
+				_rect(img, ox + 10, 8, 2, 3, DB32.deep_blue)
+				_rect(img, ox + 5, 12, 3, 3, DB32.charcoal)
+				_rect(img, ox + 9, 12, 2, 4, DB32.charcoal)
+			3:
+				# Поднятый жезл / жест «Стоп!»
+				_rect(img, ox + 3, 8, 2, 3, DB32.deep_blue)
+				_rect(img, ox + 11, 5, 2, 5, DB32.red)         # жезл регулировщика
+				_safe_pixel(img, ox + 11, 5, DB32.pure_white)
+				_rect(img, ox + 6, 12, 2, 4, DB32.charcoal)
+				_rect(img, ox + 9, 12, 2, 4, DB32.charcoal)
+
+	return img
+
+
+# ==============================================================================
+# 22. СОВРЕМЕННАЯ ТЕПЛИЦА (56x36)
+# ==============================================================================
+static func _generate_greenhouse() -> Image:
+	var img: Image = Image.create(56, 36, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+
+	# 1. Фундамент и цоколь (каменный/бетонный)
+	_rect(img, 2, 30, 52, 6, DB32.slate)
+	_rect(img, 2, 30, 52, 1, DB32.light_grey)
+	_rect(img, 2, 35, 52, 1, DB32.dark_grey)
+
+	# 2. Внутреннее освещение и тропическая зелень за стеклом
+	# Теплый свет фитоламп
+	for x in range(4, 52):
+		for y in range(8, 30):
+			var light_tint: Color = Color(0.2, 0.45, 0.35, 0.7)
+			if y < 14:
+				light_tint = Color(0.4, 0.5, 0.25, 0.75) # золотистый свет ламп сверху
+			img.set_pixel(x, y, light_tint)
+
+	# Тропические растения внутри (пальмы, ветви, созревающие плоды)
+	_rect(img, 8, 16, 12, 14, DB32.forest_green)
+	_rect(img, 24, 14, 14, 16, DB32.dark_green)
+	_rect(img, 38, 18, 11, 12, DB32.bright_green)
+
+	# Плоды за стеклом (желтые бананы, оранжевые апельсины)
+	_circle(img, 13, 20, 2, DB32.yellow)
+	_circle(img, 29, 18, 2, DB32.orange)
+	_circle(img, 43, 22, 2, DB32.warm_brown)
+
+	# 3. Арочный каркас из белой стали
+	# Вертикальные ребра
+	for rx in [3, 14, 25, 36, 47, 52]:
+		_rect(img, rx, 6, 2, 25, DB32.light_grey)
+		_safe_pixel(img, rx, 6, DB32.pure_white)
+
+	# Горизонтальные балки
+	_rect(img, 3, 6, 50, 2, DB32.light_grey)
+	_rect(img, 3, 18, 50, 1, DB32.light_grey)
+
+	# Арочная крыша со стеклянными скатами
+	for i in range(12):
+		_rect(img, 3 + i * 2, 6 - int(i * 0.4), 2, 1, DB32.pure_white)
+		_rect(img, 51 - i * 2, 6 - int(i * 0.4), 2, 1, DB32.pure_white)
+	_rect(img, 23, 1, 10, 2, DB32.light_grey) # конёк крыши
+
+	# 4. Блики на стекле
+	for d in range(8):
+		_safe_pixel(img, 8 + d, 8 + d, DB32.pure_white)
+		_safe_pixel(img, 30 + d, 8 + d, DB32.pure_white)
+
+	# 5. Дверь по центру
+	_rect(img, 24, 19, 8, 12, DB32.pure_white)
+	_rect(img, 25, 20, 6, 10, Color(0.3, 0.6, 0.7, 0.8))
+	_rect(img, 30, 25, 1, 2, DB32.gold) # ручка
+
+	return img
+
+
+# ==============================================================================
+# 23. ЭКЗОТИЧЕСКИЕ КУЛЬТУРЫ ТЕПЛИЦЫ (64x16, 4 культуры 16x16)
+# ==============================================================================
+static func _generate_greenhouse_crops() -> Image:
+	var img: Image = Image.create(64, 16, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+
+	# 0: Бананы (ох = 0)
+	_rect(img, 6, 2, 3, 3, DB32.dark_green)       # черешок
+	_circle(img, 7, 7, 4, DB32.yellow)           # гроздь
+	_circle(img, 9, 8, 3, DB32.gold)
+	_rect(img, 5, 8, 6, 3, DB32.yellow)
+	_safe_pixel(img, 4, 11, DB32.dark_brown)     # кончик
+	_safe_pixel(img, 8, 12, DB32.dark_brown)
+
+	# 1: Апельсины (ох = 16)
+	_rect(img, 23, 2, 2, 2, DB32.wood_brown)
+	_rect(img, 21, 3, 3, 2, DB32.forest_green)   # листья
+	_circle(img, 24, 9, 5, DB32.orange)          # апельсин
+	_circle(img, 23, 8, 3, DB32.warm_brown)
+	_safe_pixel(img, 22, 6, DB32.yellow)         # блик
+
+	# 2: Грецкие орехи (ох = 32)
+	_rect(img, 38, 2, 3, 2, DB32.green)          # ветка
+	_circle(img, 40, 8, 4, DB32.wood_brown)      # скорлупа
+	_circle(img, 40, 8, 2, DB32.sand)            # ядро
+	_rect(img, 38, 7, 4, 2, DB32.dark_brown)     # бороздка ореха
+
+	# 3: Манго (ох = 48)
+	_rect(img, 55, 2, 2, 2, DB32.dark_brown)
+	_rect(img, 56, 3, 4, 2, DB32.forest_green)
+	_circle(img, 56, 8, 5, DB32.orange)          # плод
+	_circle(img, 57, 9, 4, DB32.crimson)         # румянец
+	_circle(img, 55, 7, 2, DB32.yellow)          # спелый бок
+
+	return img
+
+
+# ==============================================================================
+# 24. РАБОТНИК ТЕПЛИЦЫ (64x16, 4 кадра 16x16)
+# ==============================================================================
+static func _generate_greenhouse_worker() -> Image:
+	var img: Image = Image.create(64, 16, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+
+	for frame in range(4):
+		var ox: int = frame * 16
+
+		# Соломенная панама
+		_rect(img, ox + 4, 2, 8, 1, DB32.sand)
+		_rect(img, ox + 5, 1, 6, 2, DB32.yellow)
+
+		# Лицо
+		_rect(img, ox + 6, 3, 4, 3, DB32.light_sand)
+
+		# Зеленый рабочий фартук
+		_rect(img, ox + 5, 6, 6, 5, DB32.forest_green)
+		_rect(img, ox + 6, 6, 4, 2, DB32.light_green)   # нагрудник
+
+		# Ноги
+		_rect(img, ox + 5, 12, 2, 4, DB32.slate)
+		_rect(img, ox + 9, 12, 2, 4, DB32.slate)
+
+		# Руки и инструмент
+		match frame:
+			0:
+				# Держит лейку
+				_rect(img, ox + 2, 8, 3, 4, DB32.cyan)
+				_rect(img, ox + 1, 8, 1, 2, DB32.light_grey) # носик
+			1:
+				# Шагает
+				_rect(img, ox + 4, 7, 2, 4, DB32.light_sand)
+				_rect(img, ox + 10, 7, 2, 4, DB32.light_sand)
+			2:
+				# Поливает (брызги)
+				_rect(img, ox + 2, 9, 3, 3, DB32.cyan)
+				_safe_pixel(img, ox + 1, 12, DB32.light_blue)
+			3:
+				# Несет корзинку с фруктами
+				_rect(img, ox + 9, 8, 4, 4, DB32.wood_brown)
+				_safe_pixel(img, ox + 10, 8, DB32.orange)
+				_safe_pixel(img, ox + 11, 8, DB32.yellow)
+
+	return img
+
+
+# ==============================================================================
+# 25. ВОЛОНТЁР В ЯРКОМ ЖИЛЕТЕ (64x16, 4 кадра 16x16)
+# ==============================================================================
+static func _generate_volunteer() -> Image:
+	var img: Image = Image.create(64, 16, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+
+	for frame in range(4):
+		var ox: int = frame * 16
+
+		# Бейсболка козырьком назад / вбок
+		_rect(img, ox + 5, 1, 6, 2, DB32.pink if frame % 2 == 0 else DB32.cyan)
+		_rect(img, ox + 4, 2, 2, 1, DB32.charcoal) # козырек
+
+		# Лицо с улыбкой
+		_rect(img, ox + 6, 3, 4, 3, DB32.light_sand)
+		_safe_pixel(img, ox + 8, 4, DB32.charcoal)
+
+		# Ярко-салатовый сигнальный жилет с белыми полосами
+		_rect(img, ox + 5, 6, 6, 5, DB32.light_green)
+		_rect(img, ox + 5, 8, 6, 1, DB32.pure_white)    # светоотражатель
+
+		# Джинсы
+		_rect(img, ox + 5, 11, 3, 5, DB32.light_blue)
+		_rect(img, ox + 9, 11, 3, 5, DB32.light_blue)
+		_rect(img, ox + 4, 15, 3, 1, DB32.red)          # кеды
+		_rect(img, ox + 9, 15, 3, 1, DB32.red)
+
+		# Анимация помощи
+		match frame:
+			0:
+				# С граблями
+				_rect(img, ox + 2, 4, 1, 10, DB32.wood_brown)
+				_rect(img, ox + 1, 13, 3, 2, DB32.slate)
+			1:
+				# Энергичный шаг
+				_rect(img, ox + 4, 7, 2, 3, DB32.light_sand)
+				_rect(img, ox + 11, 7, 2, 3, DB32.light_sand)
+			2:
+				# Радостный жест (руки вверх)
+				_rect(img, ox + 3, 4, 2, 3, DB32.light_sand)
+				_rect(img, ox + 11, 4, 2, 3, DB32.light_sand)
+			3:
+				# С ящиком урожая
+				_rect(img, ox + 8, 7, 5, 4, DB32.wood_brown)
+				_safe_pixel(img, ox + 9, 7, DB32.yellow)
+				_safe_pixel(img, ox + 11, 7, DB32.red)
+
+	return img
+
+
+# ==============================================================================
+# 26. КАНИСТРА С БЕНЗИНОМ (16x16)
+# ==============================================================================
+static func _generate_fuel_canister() -> Image:
+	var img: Image = Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+
+	# Красный металлический корпус канистры
+	_rect(img, 3, 4, 10, 11, DB32.red)
+	_rect(img, 3, 4, 10, 1, DB32.crimson)
+	_rect(img, 3, 14, 10, 1, DB32.crimson)
+	_rect(img, 3, 4, 1, 11, DB32.crimson)
+	_rect(img, 12, 4, 1, 11, DB32.crimson)
+
+	# Ручка сверху
+	_rect(img, 5, 2, 6, 2, DB32.charcoal)
+	_safe_pixel(img, 7, 3, Color(0, 0, 0, 0)) # отверстие в ручке
+	_safe_pixel(img, 8, 3, Color(0, 0, 0, 0))
+
+	# Горловина с крышкой
+	_rect(img, 10, 1, 2, 3, DB32.slate)
+
+	# Значок пламени / топлива в центре
+	_circle(img, 8, 9, 2, DB32.yellow)
+	_safe_pixel(img, 8, 7, DB32.orange)
+	_safe_pixel(img, 8, 9, DB32.pure_white)
+
+	return img
+
+
+# ==============================================================================
+# 27. СЕЗОННЫЕ ДЕРЕВЬЯ И ДЕКОРАЦИИ (128x32, 4 кадра 32x32: Весна, Лето, Осень, Зима)
+# ==============================================================================
+static func _generate_seasons_decorations() -> Image:
+	var img: Image = Image.create(128, 32, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+
+	for season in range(4):
+		var ox: int = season * 32
+
+		# Ствол дерева
+		_rect(img, ox + 14, 14, 4, 18, DB32.wood_brown)
+		_rect(img, ox + 15, 16, 2, 16, DB32.dark_brown)
+		# Корни
+		_rect(img, ox + 12, 30, 8, 2, DB32.wood_brown)
+
+		match season:
+			0:
+				# 🌸 ВЕСНА: Нежная крона с бело-розовыми цветами
+				_circle(img, ox + 16, 12, 10, DB32.bright_green)
+				_circle(img, ox + 16, 12, 7, DB32.light_green)
+				# Цветущие бутоны
+				_circle(img, ox + 12, 8, 2, DB32.pink)
+				_safe_pixel(img, ox + 12, 8, DB32.pure_white)
+				_circle(img, ox + 19, 10, 2, DB32.pink)
+				_safe_pixel(img, ox + 19, 10, DB32.pure_white)
+				_circle(img, ox + 15, 15, 2, DB32.pure_white)
+				_circle(img, ox + 9, 14, 2, DB32.pink)
+				_circle(img, ox + 22, 13, 2, DB32.pure_white)
+
+			1:
+				# ☀️ ЛЕТО: Пышная темно-зеленая крона со спелыми яблоками
+				_circle(img, ox + 16, 11, 11, DB32.dark_green)
+				_circle(img, ox + 16, 11, 8, DB32.forest_green)
+				# Спелые красные яблоки
+				_circle(img, ox + 11, 8, 2, DB32.red)
+				_safe_pixel(img, ox + 11, 7, DB32.pure_white)
+				_circle(img, ox + 20, 9, 2, DB32.red)
+				_circle(img, ox + 14, 14, 2, DB32.red)
+				_circle(img, ox + 22, 13, 2, DB32.red)
+
+			2:
+				# 🍂 ОСЕНЬ: Золотая, багряная и оранжевая крона
+				_circle(img, ox + 16, 11, 10, DB32.gold)
+				_circle(img, ox + 16, 11, 7, DB32.orange)
+				_circle(img, ox + 13, 9, 3, DB32.crimson)
+				_circle(img, ox + 20, 12, 3, DB32.red)
+				# Опадающие листья
+				_safe_pixel(img, ox + 8, 18, DB32.gold)
+				_safe_pixel(img, ox + 25, 20, DB32.orange)
+				_safe_pixel(img, ox + 10, 28, DB32.gold)
+				_safe_pixel(img, ox + 23, 29, DB32.crimson)
+
+			3:
+				# ❄️ ЗИМА: Заснеженные голые ветви с сугробами снега
+				# Ветви
+				_rect(img, ox + 10, 10, 12, 2, DB32.wood_brown)
+				_rect(img, ox + 8, 7, 3, 2, DB32.wood_brown)
+				_rect(img, ox + 20, 6, 4, 2, DB32.wood_brown)
+				# Снежные шапки на ветвях
+				_rect(img, ox + 8, 8, 16, 3, DB32.pure_white)
+				_rect(img, ox + 10, 6, 6, 2, DB32.pure_white)
+				_rect(img, ox + 18, 5, 6, 2, DB32.pure_white)
+				_rect(img, ox + 11, 29, 10, 3, DB32.pure_white) # сугроб у корней
+
+	return img
+
 

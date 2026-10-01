@@ -4,44 +4,86 @@ extends RefCounted
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 
 signal bankruptcy_declared
+signal season_changed(new_season: Season, season_name: String)
+signal volunteer_status_changed(is_active: bool)
 
-# Описания доступных сельскохозяйственных культур
+# Времена года
+enum Season { SPRING, SUMMER, AUTUMN, WINTER }
+static var current_season: Season = Season.SPRING
+
+# Описания полевых культур (seed_cost = стоимость партии семян на 1 цикл сева)
 static var CROPS: Dictionary = {
 	"wheat": {
 		"id": "wheat",
 		"name": "Пшеница",
 		"row_index": 0,
-		"seed_cost": 0,
+		"seed_cost": 10,
 		"growth_time": 7.0,
-		"base_reward": 35,
+		"base_reward": 40,
 		"unlocked": true
 	},
 	"corn": {
 		"id": "corn",
 		"name": "Кукуруза",
 		"row_index": 1,
-		"seed_cost": 150,
+		"seed_cost": 35,
 		"growth_time": 10.0,
-		"base_reward": 80,
+		"base_reward": 95,
 		"unlocked": false
 	},
 	"sunflower": {
 		"id": "sunflower",
 		"name": "Подсолнух",
 		"row_index": 2,
-		"seed_cost": 400,
+		"seed_cost": 80,
 		"growth_time": 14.0,
-		"base_reward": 220,
+		"base_reward": 230,
 		"unlocked": false
 	},
 	"carrot": {
 		"id": "carrot",
 		"name": "Морковь",
 		"row_index": 3,
-		"seed_cost": 900,
+		"seed_cost": 160,
 		"growth_time": 18.0,
-		"base_reward": 550,
+		"base_reward": 560,
 		"unlocked": false
+	}
+}
+
+# Тепличные экзотические культуры (круглогодичный урожай)
+const GREENHOUSE_CROPS: Dictionary = {
+	"bananas": {
+		"id": "bananas",
+		"name": "🍌 Бананы",
+		"seed_cost": 30,
+		"growth_time": 20.0,
+		"reward": 90,
+		"frame": 0
+	},
+	"oranges": {
+		"id": "oranges",
+		"name": "🍊 Апельсины",
+		"seed_cost": 50,
+		"growth_time": 26.0,
+		"reward": 160,
+		"frame": 1
+	},
+	"walnuts": {
+		"id": "walnuts",
+		"name": "🥜 Грецкие орехи",
+		"seed_cost": 80,
+		"growth_time": 34.0,
+		"reward": 260,
+		"frame": 2
+	},
+	"mango": {
+		"id": "mango",
+		"name": "🥭 Манго",
+		"seed_cost": 120,
+		"growth_time": 42.0,
+		"reward": 400,
+		"frame": 3
 	}
 }
 
@@ -52,6 +94,33 @@ static var speed_multiplier: float = 1.0
 static var has_seeder_tractor: bool = false
 static var has_guard_dog: bool = false
 static var tractor_color: Color = Color("ac3232")
+
+# Топливная система техники (0..100 л)
+static var fuel_level: float = 100.0
+static var max_fuel: float = 100.0
+static var auto_refuel: bool = true
+
+# Износ техники и зданий (100% = новое, <40% = требует ремонта)
+static var tractor_condition: float = 100.0
+static var tanker_condition: float = 100.0
+static var harvester_condition: float = 100.0
+static var truck_condition: float = 100.0
+
+static var windmill_condition: float = 100.0
+static var barn_condition: float = 100.0
+static var canopy_condition: float = 100.0
+static var greenhouse_condition: float = 100.0
+
+# Система помощи волонтёров (1 раз в час, +70% к скорости на 3 минуты)
+const VOLUNTEER_COOLDOWN: int = 3600
+const VOLUNTEER_DURATION: float = 180.0
+static var last_volunteer_timestamp: int = 0
+static var volunteer_timer: float = 0.0
+static var is_volunteers_active: bool = false
+
+# Теплицы
+static var greenhouse_count: int = 0 # максимум 2
+static var greenhouse_crop: String = "bananas"
 
 # Улучшения фермы
 static var scarecrow_count: int = 0
@@ -70,11 +139,12 @@ static var has_road_train: bool = false      # КАМАЗ Автопоезд (+8
 static var subsidy_debt: int = 0 # Долг по субсидии (льготная ставка 5%)
 static var loan_debt: int = 0    # Долг по банковскому кредиту (ставка 20%)
 
-# Статус аварийного состояния
+# Статус аварийного состояния и событий
 static var is_broken_down: bool = false
 static var is_stuck_in_mud: bool = false
 static var is_repairing: bool = false
 static var is_strike_active: bool = false
+static var is_police_active: bool = false
 
 # Статистика сессии
 static var total_harvested: int = 0
@@ -82,6 +152,10 @@ static var total_coins_earned: int = 0
 static var total_strikes_resolved: int = 0
 static var total_repairs_done: int = 0
 static var total_bankruptcies: int = 0
+static var total_salaries_paid: int = 0
+static var total_fuel_spent: int = 0
+static var total_greenhouse_earned: int = 0
+static var total_fines_paid: int = 0
 
 static func get_max_scarecrows() -> int:
 	var screens: int = max(1, DisplayServer.get_screen_count())
@@ -90,6 +164,37 @@ static func get_max_scarecrows() -> int:
 static func get_total_debt() -> int:
 	return subsidy_debt + loan_debt
 
+# ==============================================================================
+# СЕЗОНЫ И РЫНОЧНЫЕ ЦЕНЫ
+# ==============================================================================
+static func get_season_name(s: Season = current_season) -> String:
+	match s:
+		Season.SPRING:
+			return "Весна 🌸"
+		Season.SUMMER:
+			return "Лето ☀️"
+		Season.AUTUMN:
+			return "Осень 🍂"
+		Season.WINTER:
+			return "Зима ❄️"
+	return "Весна 🌸"
+
+## Зимой дефицит еды — самая высокая цена на урожай!
+static func get_season_price_multiplier(s: Season = current_season) -> float:
+	match s:
+		Season.WINTER:
+			return 1.85 # Самая высокая цена зимой (+85%)
+		Season.SPRING:
+			return 1.20 # Весна (+20%)
+		Season.SUMMER:
+			return 1.00 # Лето (базовая цена)
+		Season.AUTUMN:
+			return 0.85 # Осень (сезон массового сбора, переизбыток)
+	return 1.0
+
+# ==============================================================================
+# СОХРАНЕНИЕ И ЗАГРУЗКА
+# ==============================================================================
 static func init_from_settings() -> void:
 	coins = int(SettingsManager.config.get_value("game", "coins", 100))
 	current_crop = str(SettingsManager.config.get_value("game", "current_crop", "wheat"))
@@ -108,6 +213,23 @@ static func init_from_settings() -> void:
 	has_heavy_tractor = bool(SettingsManager.config.get_value("game", "has_heavy_tractor", false))
 	has_super_harvester = bool(SettingsManager.config.get_value("game", "has_super_harvester", false))
 	has_road_train = bool(SettingsManager.config.get_value("game", "has_road_train", false))
+
+	# Топливо, износ, теплицы, волонтеры
+	fuel_level = float(SettingsManager.config.get_value("mechanics", "fuel_level", 100.0))
+	auto_refuel = bool(SettingsManager.config.get_value("mechanics", "auto_refuel", true))
+	tractor_condition = float(SettingsManager.config.get_value("durability", "tractor_condition", 100.0))
+	tanker_condition = float(SettingsManager.config.get_value("durability", "tanker_condition", 100.0))
+	harvester_condition = float(SettingsManager.config.get_value("durability", "harvester_condition", 100.0))
+	truck_condition = float(SettingsManager.config.get_value("durability", "truck_condition", 100.0))
+
+	windmill_condition = float(SettingsManager.config.get_value("durability", "windmill_condition", 100.0))
+	barn_condition = float(SettingsManager.config.get_value("durability", "barn_condition", 100.0))
+	canopy_condition = float(SettingsManager.config.get_value("durability", "canopy_condition", 100.0))
+	greenhouse_condition = float(SettingsManager.config.get_value("durability", "greenhouse_condition", 100.0))
+
+	last_volunteer_timestamp = int(SettingsManager.config.get_value("volunteers", "last_timestamp", 0))
+	greenhouse_count = int(SettingsManager.config.get_value("greenhouses", "count", 0))
+	greenhouse_crop = str(SettingsManager.config.get_value("greenhouses", "crop", "bananas"))
 
 	subsidy_debt = int(SettingsManager.config.get_value("finances", "subsidy_debt", 0))
 	loan_debt = int(SettingsManager.config.get_value("finances", "loan_debt", 0))
@@ -137,6 +259,21 @@ static func save_to_settings() -> void:
 	SettingsManager.config.set_value("game", "has_super_harvester", has_super_harvester)
 	SettingsManager.config.set_value("game", "has_road_train", has_road_train)
 
+	SettingsManager.config.set_value("mechanics", "fuel_level", fuel_level)
+	SettingsManager.config.set_value("mechanics", "auto_refuel", auto_refuel)
+	SettingsManager.config.set_value("durability", "tractor_condition", tractor_condition)
+	SettingsManager.config.set_value("durability", "tanker_condition", tanker_condition)
+	SettingsManager.config.set_value("durability", "harvester_condition", harvester_condition)
+	SettingsManager.config.set_value("durability", "truck_condition", truck_condition)
+	SettingsManager.config.set_value("durability", "windmill_condition", windmill_condition)
+	SettingsManager.config.set_value("durability", "barn_condition", barn_condition)
+	SettingsManager.config.set_value("durability", "canopy_condition", canopy_condition)
+	SettingsManager.config.set_value("durability", "greenhouse_condition", greenhouse_condition)
+
+	SettingsManager.config.set_value("volunteers", "last_timestamp", last_volunteer_timestamp)
+	SettingsManager.config.set_value("greenhouses", "count", greenhouse_count)
+	SettingsManager.config.set_value("greenhouses", "crop", greenhouse_crop)
+
 	SettingsManager.config.set_value("finances", "subsidy_debt", subsidy_debt)
 	SettingsManager.config.set_value("finances", "loan_debt", loan_debt)
 	SettingsManager.config.set_value("finances", "total_bankruptcies", total_bankruptcies)
@@ -164,13 +301,146 @@ static func get_current_crop_data() -> Dictionary:
 	return CROPS.get(current_crop, CROPS["wheat"])
 
 # ==============================================================================
+# ТОПЛИВНАЯ СИСТЕМА
+# ==============================================================================
+static func consume_fuel(amount: float) -> bool:
+	if fuel_level >= amount:
+		fuel_level -= amount
+		save_to_settings()
+		return true
+	fuel_level = 0.0
+	save_to_settings()
+	return false
+
+static func refuel(amount: float, cost: int) -> bool:
+	if spend_coins(cost):
+		fuel_level = min(max_fuel, fuel_level + amount)
+		total_fuel_spent += cost
+		save_to_settings()
+		return true
+	return false
+
+# ==============================================================================
+# ИЗНОС И ТЕХОБСЛУЖИВАНИЕ (СТАРЕНИЕ)
+# ==============================================================================
+static func degrade_durability() -> void:
+	# Снижение состояния техники за каждый завершенный цикл
+	tractor_condition = max(5.0, tractor_condition - 2.5)
+	tanker_condition = max(5.0, tanker_condition - 2.0)
+	harvester_condition = max(5.0, harvester_condition - 2.5)
+	truck_condition = max(5.0, truck_condition - 2.0)
+
+	if has_windmill:
+		windmill_condition = max(10.0, windmill_condition - 1.2)
+	if has_barn:
+		barn_condition = max(10.0, barn_condition - 1.2)
+	if canopy_count > 0:
+		canopy_condition = max(10.0, canopy_condition - 1.2)
+	if greenhouse_count > 0:
+		greenhouse_condition = max(10.0, greenhouse_condition - 1.2)
+
+	save_to_settings()
+
+static func get_machinery_average_condition() -> float:
+	return (tractor_condition + tanker_condition + harvester_condition + truck_condition) / 4.0
+
+static func repair_all_machinery() -> bool:
+	var cost: int = 40
+	if spend_coins(cost):
+		tractor_condition = 100.0
+		tanker_condition = 100.0
+		harvester_condition = 100.0
+		truck_condition = 100.0
+		save_to_settings()
+		return true
+	return false
+
+static func repair_all_buildings() -> bool:
+	var cost: int = 35
+	if spend_coins(cost):
+		windmill_condition = 100.0
+		barn_condition = 100.0
+		canopy_condition = 100.0
+		greenhouse_condition = 100.0
+		save_to_settings()
+		return true
+	return false
+
+# ==============================================================================
+# ВОЛОНТЁРЫ (НЕ ЧАЩЕ 1 РАЗА В ЧАС, +70% СКОРОСТЬ)
+# ==============================================================================
+static func can_call_volunteers() -> bool:
+	if is_volunteers_active:
+		return false
+	var now: int = int(Time.get_unix_time_from_system())
+	return (now - last_volunteer_timestamp) >= VOLUNTEER_COOLDOWN
+
+static func get_volunteer_cooldown_left() -> int:
+	var now: int = int(Time.get_unix_time_from_system())
+	return max(0, VOLUNTEER_COOLDOWN - (now - last_volunteer_timestamp))
+
+static func call_volunteers() -> bool:
+	if not can_call_volunteers():
+		return false
+	last_volunteer_timestamp = int(Time.get_unix_time_from_system())
+	is_volunteers_active = true
+	volunteer_timer = VOLUNTEER_DURATION
+	save_to_settings()
+	return true
+
+static func update_volunteers(delta: float) -> void:
+	if not is_volunteers_active:
+		return
+	volunteer_timer -= delta
+	if volunteer_timer <= 0.0:
+		is_volunteers_active = false
+		volunteer_timer = 0.0
+
+# ==============================================================================
+# ТЕПЛИЦЫ И ЭКЗОТИЧЕСКИЕ КУЛЬТУРЫ
+# ==============================================================================
+static func buy_greenhouse() -> bool:
+	if greenhouse_count >= 2:
+		return false
+	var cost: int = 700
+	if spend_coins(cost):
+		greenhouse_count += 1
+		greenhouse_condition = 100.0
+		save_to_settings()
+		return true
+	return false
+
+static func get_current_greenhouse_data() -> Dictionary:
+	return GREENHOUSE_CROPS.get(greenhouse_crop, GREENHOUSE_CROPS["bananas"])
+
+static func harvest_greenhouse() -> int:
+	if greenhouse_count <= 0:
+		return 0
+	var data: Dictionary = get_current_greenhouse_data()
+	var seed_c: int = int(data.get("seed_cost", 30)) * greenhouse_count
+	var gross: int = int(data.get("reward", 90)) * greenhouse_count
+
+	# Учитываем состояние теплицы
+	var condition_mult: float = 1.0 if greenhouse_condition >= 40.0 else 0.7
+	gross = int(gross * condition_mult)
+
+	# Закупка партии семян
+	if not spend_coins(seed_c):
+		seed_c = 0
+
+	var net: int = max(10, gross - seed_c)
+	add_coins(net)
+	total_greenhouse_earned += net
+	return net
+
+# ==============================================================================
 # ФИНАНСОВЫЕ ОПЕРАЦИИ (СУБСИДИИ, КРЕДИТЫ, ВЫПЛАТЫ, БАНКРОТСТВО)
 # ==============================================================================
 
 ## Взять государственную субсидию (+500 монет, долг 525 под 5%)
 static func take_subsidy(amount: int = 500, percent: float = 5.0) -> bool:
 	if subsidy_debt > 0:
-		return false # Уже есть активная субсидия
+		return false
 	subsidy_debt = int(amount * (1.0 + percent / 100.0))
 	add_coins(amount)
 	return true
@@ -188,7 +458,7 @@ static func repay_subsidy_early() -> bool:
 ## Взять коммерческий кредит в банке (+1000 монет, долг 1200 под 20%)
 static func take_bank_loan(amount: int = 1000, percent: float = 20.0) -> bool:
 	if loan_debt > 0:
-		return false # Уже есть непогашенный кредит
+		return false
 	loan_debt = int(amount * (1.0 + percent / 100.0))
 	add_coins(amount)
 	return true
@@ -203,31 +473,52 @@ static func repay_loan_early() -> bool:
 		return true
 	return false
 
-## Автоматическое удержание части дохода урожая в счет погашения долгов
+## Автоматический расчет выручки, зарплат, топлива и погашения долгов
 static func process_harvest_finances(gross_reward: int) -> Dictionary:
 	var net_coins: int = gross_reward
 	var subsidy_payment: int = 0
 	var loan_payment: int = 0
+	var salary_payment: int = 0
+	var fuel_payment: int = 0
 
-	# 10% с выручки на субсидию
+	# 1. Выплата зарплаты рабочим и водителям техники
+	var base_salary: int = 14 + (0 if has_seeder_tractor else 12) + (greenhouse_count * 8)
+	salary_payment = min(net_coins, base_salary)
+	net_coins -= salary_payment
+	total_salaries_paid += salary_payment
+
+	# 2. 10% с выручки на субсидию
 	if subsidy_debt > 0:
 		subsidy_payment = min(subsidy_debt, int(gross_reward * 0.10))
 		subsidy_debt -= subsidy_payment
 		net_coins -= subsidy_payment
 
-	# 25% с выручки на банковский кредит
+	# 3. 25% с выручки на банковский кредит
 	if loan_debt > 0:
 		loan_payment = min(loan_debt, int(gross_reward * 0.25))
 		loan_debt -= loan_payment
 		net_coins -= loan_payment
 
+	# 4. Автоматическая дозаправка топлива при необходимости
+	if auto_refuel and fuel_level < 25.0:
+		var needed: float = max_fuel - fuel_level
+		var fuel_cost: int = int(needed * 1.1)
+		if net_coins >= fuel_cost:
+			net_coins -= fuel_cost
+			fuel_payment = fuel_cost
+			fuel_level = max_fuel
+			total_fuel_spent += fuel_cost
+
 	add_coins(net_coins)
+	degrade_durability()
 	save_to_settings()
 
 	return {
 		"net_coins": net_coins,
+		"salary_paid": salary_payment,
 		"subsidy_paid": subsidy_payment,
 		"loan_paid": loan_payment,
+		"fuel_paid": fuel_payment,
 		"total_debt_remaining": get_total_debt()
 	}
 
@@ -248,11 +539,26 @@ static func declare_bankruptcy() -> void:
 	has_windmill = false
 	has_barn = false
 	canopy_count = 0
+	greenhouse_count = 0
 	has_heavy_tractor = false
 	has_super_harvester = false
 	has_road_train = false
 	active_decoration = "none"
 	unlocked_decorations = ["none"]
+
+	fuel_level = 100.0
+	auto_refuel = true
+	tractor_condition = 100.0
+	tanker_condition = 100.0
+	harvester_condition = 100.0
+	truck_condition = 100.0
+	windmill_condition = 100.0
+	barn_condition = 100.0
+	canopy_condition = 100.0
+	greenhouse_condition = 100.0
+
+	is_volunteers_active = false
+	volunteer_timer = 0.0
 
 	# Блокировка платных культур
 	for cid in CROPS:
@@ -262,5 +568,6 @@ static func declare_bankruptcy() -> void:
 	is_stuck_in_mud = false
 	is_repairing = false
 	is_strike_active = false
+	is_police_active = false
 
 	save_to_settings()

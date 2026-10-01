@@ -12,9 +12,14 @@ signal tractor_color_changed(color: Color)
 signal repair_requested
 signal strike_resolve_requested
 signal bankruptcy_requested
+signal police_fine_requested
+signal police_bribe_requested
 
 # UI ноды
 @onready var coins_label: Label = $VBox/Header/HBoxCoins/CoinsValue
+@onready var lbl_season: Label = $VBox/Header/LblSeason
+@onready var btn_police_fine: Button = $VBox/Header/BtnResolvePoliceFine
+@onready var btn_police_bribe: Button = $VBox/Header/BtnResolvePoliceBribe
 @onready var btn_resolve_strike: Button = $VBox/Header/BtnResolveStrike
 @onready var btn_emergency_repair: Button = $VBox/Header/BtnEmergencyRepair
 @onready var tab_container: TabContainer = $VBox/TabContainer
@@ -64,8 +69,31 @@ signal bankruptcy_requested
 @onready var lbl_stat_strikes: Label = $VBox/TabContainer/Статистика/VBoxStats/Grid/StatStrikesVal
 @onready var lbl_stat_repairs: Label = $VBox/TabContainer/Статистика/VBoxStats/Grid/StatRepairsVal
 @onready var lbl_stat_bankruptcies: Label = $VBox/TabContainer/Статистика/VBoxStats/Grid/StatBankruptciesVal
+@onready var lbl_stat_salaries: Label = $VBox/TabContainer/Статистика/VBoxStats/Grid/StatSalariesVal
+@onready var lbl_stat_fuel: Label = $VBox/TabContainer/Статистика/VBoxStats/Grid/StatFuelVal
+@onready var lbl_stat_greenhouse: Label = $VBox/TabContainer/Статистика/VBoxStats/Grid/StatGreenhouseVal
+@onready var lbl_stat_fines: Label = $VBox/TabContainer/Статистика/VBoxStats/Grid/StatFinesVal
 @onready var lbl_repair_status: Label = $VBox/TabContainer/Статистика/VBoxStats/HBoxRepairAction/RepairStatusLbl
 @onready var btn_stat_call_repair: Button = $VBox/TabContainer/Статистика/VBoxStats/HBoxRepairAction/BtnStatCallRepair
+
+# Производство и ТО
+@onready var lbl_fuel_level: Label = $"VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/FuelSection/HBoxFuel/LblFuelLevel"
+@onready var btn_refuel_20: Button = $"VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/FuelSection/HBoxFuel/BtnRefuel20"
+@onready var btn_refuel_full: Button = $"VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/FuelSection/HBoxFuel/BtnRefuelFull"
+@onready var check_auto_refuel: CheckBox = $"VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/FuelSection/CheckAutoRefuel"
+
+@onready var lbl_gh_count: Label = $"VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/GreenhouseSection/HBoxGHBuy/LblGHCount"
+@onready var btn_buy_gh: Button = $"VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/GreenhouseSection/HBoxGHBuy/BtnBuyGreenhouse"
+@onready var opt_gh_crop: OptionButton = $"VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/GreenhouseSection/HBoxGHCrop/OptGreenhouseCrop"
+@onready var lbl_gh_crop_info: Label = $"VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/GreenhouseSection/LblGreenhouseCropInfo"
+
+@onready var lbl_volunteer_status: Label = $"VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/VolunteerSection/HBoxVol/LblVolunteerStatus"
+@onready var btn_call_volunteers: Button = $"VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/VolunteerSection/HBoxVol/BtnCallVolunteers"
+
+@onready var lbl_machinery_cond: Label = $"VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/DurabilitySection/HBoxMachinery/LblMachineryCond"
+@onready var btn_repair_machinery: Button = $"VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/DurabilitySection/HBoxMachinery/BtnRepairMachinery"
+@onready var lbl_buildings_cond: Label = $"VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/DurabilitySection/HBoxBuildings/LblBuildingsCond"
+@onready var btn_repair_buildings: Button = $"VBox/TabContainer/Производство и ТО/ScrollProduction/VBox/DurabilitySection/HBoxBuildings/BtnRepairBuildings"
 
 var speed_upgrade_cost: int = 120
 
@@ -79,12 +107,10 @@ const DECOR_CATALOG: Dictionary = {
 }
 
 func _ready() -> void:
-	close_requested.connect(_on_close_requested)
-	if tab_container != null:
-		tab_container.tab_changed.connect(func(_idx: int):
-			_refresh_seeds_ui()
-			_update_ui()
-		)
+	if not close_requested.is_connected(_on_close_requested):
+		close_requested.connect(_on_close_requested)
+	if tab_container != null and not tab_container.tab_changed.is_connected(_on_tab_changed):
+		tab_container.tab_changed.connect(_on_tab_changed)
 	_setup_window_position()
 	_setup_monitors_list()
 	_setup_graphics_and_fps()
@@ -92,6 +118,8 @@ func _ready() -> void:
 	_setup_upgrades_tab()
 	_setup_finances_tab()
 	_setup_repair_buttons()
+	_setup_production_tab()
+	_setup_police_buttons()
 	_refresh_seeds_ui()
 	_update_ui()
 
@@ -104,6 +132,10 @@ func _setup_window_position() -> void:
 
 func _on_close_requested() -> void:
 	hide()
+
+func _on_tab_changed(_idx: int) -> void:
+	_refresh_seeds_ui()
+	_update_ui()
 
 func open_hq() -> void:
 	_refresh_seeds_ui()
@@ -129,6 +161,27 @@ func _update_ui() -> void:
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins
 
+	# Сезон года и модификатор рыночных цен
+	if lbl_season != null:
+		var s_name: String = GameManager.get_season_name()
+		var s_mult: float = GameManager.get_season_price_multiplier()
+		var mult_diff: int = int((s_mult - 1.0) * 100.0)
+		var mult_str: String = ("+%d%%" % mult_diff) if mult_diff >= 0 else ("%d%%" % mult_diff)
+		lbl_season.text = "🗓 Сезон: %s (Цены: %s)" % [s_name, mult_str]
+
+	# Кнопки взаимодействия с полицией
+	if btn_police_fine != null and btn_police_bribe != null:
+		var is_pol: bool = GameManager.is_police_active
+		btn_police_fine.visible = is_pol
+		btn_police_bribe.visible = is_pol
+		if is_pol:
+			var fine_amt: int = 40 if GameManager.has_guard_dog else 80
+			var bribe_amt: int = max(10, int(GameManager.coins * 0.10))
+			btn_police_fine.text = "📋 Штраф (%d 🪙)" % fine_amt
+			btn_police_fine.disabled = (GameManager.coins < fine_amt)
+			btn_police_bribe.text = "🤝 Взятка (%d 🪙)" % bribe_amt
+			btn_police_bribe.disabled = (GameManager.coins < bribe_amt)
+
 	# Кнопка урегулирования забастовки сеятелей
 	if btn_resolve_strike != null:
 		btn_resolve_strike.visible = GameManager.is_strike_active
@@ -137,31 +190,30 @@ func _update_ui() -> void:
 
 	# Статус поломки или застревания в грязи
 	var is_trouble: bool = GameManager.is_broken_down or GameManager.is_stuck_in_mud
-	if btn_emergency_repair == null or btn_stat_call_repair == null:
-		return
-	btn_emergency_repair.visible = is_trouble
+	if btn_emergency_repair != null and btn_stat_call_repair != null:
+		btn_emergency_repair.visible = is_trouble
 
-	if GameManager.is_repairing:
-		btn_emergency_repair.text = "🚑 Ремонт уже в пути..."
-		btn_emergency_repair.disabled = true
-		btn_stat_call_repair.text = "🚑 Ремонт уже в пути..."
-		btn_stat_call_repair.disabled = true
-		lbl_repair_status.text = "Статус: 🚑 Аварийная служба в пути..."
-	elif is_trouble:
-		btn_emergency_repair.text = "🔧 Вызвать ремонт (30 🪙)"
-		btn_emergency_repair.disabled = (GameManager.coins < 30)
-		btn_stat_call_repair.text = "🔧 Вызвать ремонтную бригаду (30 🪙)"
-		btn_stat_call_repair.disabled = (GameManager.coins < 30)
-		if GameManager.is_broken_down:
-			lbl_repair_status.text = "Статус: ⚙ ТЕХНИКА СЛОМАЛАСЬ! ВАЛИТ ДЫМ!"
-		elif GameManager.is_stuck_in_mud:
-			lbl_repair_status.text = "Статус: 🌧 ТЕХНИКА ЗАСТРЯЛА В ГРЯЗИ!"
-	else:
-		btn_emergency_repair.text = "🔧 Вызвать ремонт (30 🪙)"
-		btn_emergency_repair.disabled = true
-		btn_stat_call_repair.text = "🔧 Вызвать ремонтную бригаду (30 🪙)"
-		btn_stat_call_repair.disabled = true
-		lbl_repair_status.text = "Статус: Вся техника на ходу ✔"
+		if GameManager.is_repairing:
+			btn_emergency_repair.text = "🚑 Ремонт уже в пути..."
+			btn_emergency_repair.disabled = true
+			btn_stat_call_repair.text = "🚑 Ремонт уже в пути..."
+			btn_stat_call_repair.disabled = true
+			lbl_repair_status.text = "Статус: 🚑 Аварийная служба в пути..."
+		elif is_trouble:
+			btn_emergency_repair.text = "🔧 Вызвать ремонт (30 🪙)"
+			btn_emergency_repair.disabled = (GameManager.coins < 30)
+			btn_stat_call_repair.text = "🔧 Вызвать ремонтную бригаду (30 🪙)"
+			btn_stat_call_repair.disabled = (GameManager.coins < 30)
+			if GameManager.is_broken_down:
+				lbl_repair_status.text = "Статус: ⚙ ТЕХНИКА СЛОМАЛАСЬ! ВАЛИТ ДЫМ!"
+			elif GameManager.is_stuck_in_mud:
+				lbl_repair_status.text = "Статус: 🌧 ТЕХНИКА ЗАСТРЯЛА В ГРЯЗИ!"
+		else:
+			btn_emergency_repair.text = "🔧 Вызвать ремонт (30 🪙)"
+			btn_emergency_repair.disabled = true
+			btn_stat_call_repair.text = "🔧 Вызвать ремонтную бригаду (30 🪙)"
+			btn_stat_call_repair.disabled = true
+			lbl_repair_status.text = "Статус: Вся техника на ходу ✔"
 
 	# Мельница
 	if btn_buy_windmill != null:
@@ -235,6 +287,14 @@ func _update_ui() -> void:
 		lbl_stat_repairs.text = "%d" % GameManager.total_repairs_done
 	if lbl_stat_bankruptcies != null:
 		lbl_stat_bankruptcies.text = "%d" % GameManager.total_bankruptcies
+	if lbl_stat_salaries != null:
+		lbl_stat_salaries.text = "%d 🪙" % GameManager.total_salaries_paid
+	if lbl_stat_fuel != null:
+		lbl_stat_fuel.text = "%d 🪙" % GameManager.total_fuel_spent
+	if lbl_stat_greenhouse != null:
+		lbl_stat_greenhouse.text = "%d 🪙" % GameManager.total_greenhouse_earned
+	if lbl_stat_fines != null:
+		lbl_stat_fines.text = "%d 🪙" % GameManager.total_fines_paid
 
 	# Финансы
 	if lbl_total_debt != null:
@@ -280,6 +340,70 @@ func _update_ui() -> void:
 			btn_buy_road_train.text = "Купить (950 🪙)"
 			btn_buy_road_train.disabled = GameManager.coins < 950
 
+	# Производство и ТО: Топливо
+	if lbl_fuel_level != null:
+		lbl_fuel_level.text = "Уровень топлива: %.1f / %.0f л" % [GameManager.fuel_level, GameManager.max_fuel]
+	if btn_refuel_20 != null:
+		btn_refuel_20.disabled = (GameManager.fuel_level >= GameManager.max_fuel) or (GameManager.coins < 25)
+	if btn_refuel_full != null:
+		var needed: float = GameManager.max_fuel - GameManager.fuel_level
+		var full_cost: int = int(ceil(needed * 1.1))
+		btn_refuel_full.text = "Полный бак (%d 🪙)" % full_cost if needed > 0.5 else "Бак полон ✔"
+		btn_refuel_full.disabled = (needed <= 0.5) or (GameManager.coins < full_cost)
+	if check_auto_refuel != null:
+		check_auto_refuel.button_pressed = GameManager.auto_refuel
+
+	# Производство и ТО: Теплицы
+	if lbl_gh_count != null:
+		lbl_gh_count.text = "Построено теплиц: %d / 2" % GameManager.greenhouse_count
+	if btn_buy_gh != null:
+		if GameManager.greenhouse_count >= 2:
+			btn_buy_gh.text = "Максимум (2/2) ✔"
+			btn_buy_gh.disabled = true
+		else:
+			btn_buy_gh.text = "Купить теплицу (700 🪙)"
+			btn_buy_gh.disabled = (GameManager.coins < 700)
+	if lbl_gh_crop_info != null:
+		var gh_data: Dictionary = GameManager.get_current_greenhouse_data()
+		lbl_gh_crop_info.text = "%s: доход +%d 🪙 (семена %d 🪙, созревание %.0f сек)" % [
+			gh_data.get("name", ""),
+			gh_data.get("reward", 0),
+			gh_data.get("seed_cost", 0),
+			gh_data.get("growth_time", 20.0)
+		]
+
+	# Производство и ТО: Волонтёры
+	if lbl_volunteer_status != null and btn_call_volunteers != null:
+		if GameManager.is_volunteers_active:
+			var rem_sec: int = int(GameManager.volunteer_timer)
+			lbl_volunteer_status.text = "Статус: 🤝 Волонтёры помогают на поле! (Осталось: %d:%02d)" % [rem_sec / 60, rem_sec % 60]
+			btn_call_volunteers.disabled = true
+			btn_call_volunteers.text = "Волонтёры работают ✔"
+		elif GameManager.can_call_volunteers():
+			lbl_volunteer_status.text = "Статус: Готовы прийти на помощь бесплатно ✔"
+			btn_call_volunteers.disabled = false
+			btn_call_volunteers.text = "🤝 Призвать волонтёров (+70%)"
+		else:
+			var cd_left: int = GameManager.get_volunteer_cooldown_left()
+			lbl_volunteer_status.text = "Статус: Перезарядка призыва (%d мин)" % int(ceil(float(cd_left) / 60.0))
+			btn_call_volunteers.disabled = true
+			btn_call_volunteers.text = "Перезарядка (%d:%02d)" % [cd_left / 60, cd_left % 60]
+
+	# Производство и ТО: Износ и ТО
+	if lbl_machinery_cond != null and btn_repair_machinery != null:
+		var avg_mach: float = GameManager.get_machinery_average_condition()
+		var cond_warn: String = " (Требует ТО!)" if avg_mach < 40.0 else " ✔"
+		lbl_machinery_cond.text = "Состояние автопарка: %.0f%%%s" % [avg_mach, cond_warn]
+		btn_repair_machinery.text = "ТО автопарка (40 🪙)" if avg_mach < 99.0 else "Техника в идеале ✔"
+		btn_repair_machinery.disabled = (avg_mach >= 99.0) or (GameManager.coins < 40)
+
+	if lbl_buildings_cond != null and btn_repair_buildings != null:
+		var avg_build: float = (GameManager.windmill_condition + GameManager.barn_condition + GameManager.canopy_condition + GameManager.greenhouse_condition) / 4.0
+		var build_warn: String = " (Требует капремонта!)" if avg_build < 40.0 else " ✔"
+		lbl_buildings_cond.text = "Состояние построек: %.0f%%%s" % [avg_build, build_warn]
+		btn_repair_buildings.text = "Капремонт зданий (35 🪙)" if avg_build < 99.0 else "Здания в идеале ✔"
+		btn_repair_buildings.disabled = (avg_build >= 99.0) or (GameManager.coins < 35)
+
 func _refresh_seeds_ui() -> void:
 	if seed_container == null:
 		return
@@ -295,8 +419,8 @@ func _refresh_seeds_ui() -> void:
 		item_panel.add_child(hbox)
 
 		var lbl_info: Label = Label.new()
-		lbl_info.text = "%s\n⏱ Рост: %.0fc | 💰 Доход: +%d 🪙" % [
-			c_data.name, c_data.growth_time, c_data.base_reward
+		lbl_info.text = "%s\n⏱ Рост: %.0fc | 💰 Доход: +%d 🪙 | 🌱 Семена: %d 🪙/цикл" % [
+			c_data.name, c_data.growth_time, c_data.base_reward, c_data.seed_cost
 		]
 		lbl_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hbox.add_child(lbl_info)
@@ -561,5 +685,84 @@ func _setup_finances_tab() -> void:
 			_refresh_seeds_ui()
 			_update_decor_ui()
 			_update_ui()
+		)
+
+func _setup_police_buttons() -> void:
+	if btn_police_fine != null:
+		btn_police_fine.pressed.connect(func():
+			police_fine_requested.emit()
+			_update_ui()
+		)
+	if btn_police_bribe != null:
+		btn_police_bribe.pressed.connect(func():
+			police_bribe_requested.emit()
+			_update_ui()
+		)
+
+func _setup_production_tab() -> void:
+	# Топливо
+	if btn_refuel_20 != null:
+		btn_refuel_20.pressed.connect(func():
+			if GameManager.refuel(20.0, 25):
+				_update_ui()
+		)
+	if btn_refuel_full != null:
+		btn_refuel_full.pressed.connect(func():
+			var needed: float = GameManager.max_fuel - GameManager.fuel_level
+			var cost: int = int(ceil(needed * 1.1))
+			if GameManager.refuel(needed, cost):
+				_update_ui()
+		)
+	if check_auto_refuel != null:
+		check_auto_refuel.button_pressed = GameManager.auto_refuel
+		check_auto_refuel.toggled.connect(func(toggled: bool):
+			GameManager.auto_refuel = toggled
+			GameManager.save_to_settings()
+		)
+
+	# Теплицы
+	if btn_buy_gh != null:
+		btn_buy_gh.pressed.connect(func():
+			if GameManager.buy_greenhouse():
+				_update_ui()
+		)
+
+	if opt_gh_crop != null:
+		opt_gh_crop.clear()
+		var gh_keys: Array = GameManager.GREENHOUSE_CROPS.keys()
+		var current_crop_idx: int = 0
+		for i in range(gh_keys.size()):
+			var k: String = gh_keys[i]
+			var c_info: Dictionary = GameManager.GREENHOUSE_CROPS[k]
+			opt_gh_crop.add_item(c_info.get("name", k), i)
+			opt_gh_crop.set_item_metadata(i, k)
+			if k == GameManager.greenhouse_crop:
+				current_crop_idx = i
+		opt_gh_crop.selected = current_crop_idx
+		opt_gh_crop.item_selected.connect(func(idx: int):
+			var selected_crop: String = str(opt_gh_crop.get_item_metadata(idx))
+			GameManager.greenhouse_crop = selected_crop
+			GameManager.save_to_settings()
+			_update_ui()
+		)
+
+	# Волонтёры
+	if btn_call_volunteers != null:
+		btn_call_volunteers.pressed.connect(func():
+			if GameManager.call_volunteers():
+				_update_ui()
+		)
+
+	# Износ и ТО
+	if btn_repair_machinery != null:
+		btn_repair_machinery.pressed.connect(func():
+			if GameManager.repair_all_machinery():
+				_update_ui()
+		)
+
+	if btn_repair_buildings != null:
+		btn_repair_buildings.pressed.connect(func():
+			if GameManager.repair_all_buildings():
+				_update_ui()
 		)
 

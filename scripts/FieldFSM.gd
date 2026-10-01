@@ -58,6 +58,11 @@ var tex_windmill: Texture2D
 var tex_barn: Texture2D
 var tex_decorations: Texture2D
 var tex_weather_parts: Texture2D
+var tex_seasons_decor: Texture2D
+var tex_greenhouse: Texture2D
+var tex_greenhouse_crops: Texture2D
+var tex_greenhouse_worker: Texture2D
+var tex_volunteer: Texture2D
 
 # Объекты сцены
 var vehicle_sprite: Sprite2D
@@ -67,6 +72,12 @@ var mud_splash_sprite: Sprite2D
 var campfire_sprite: Sprite2D
 var resting_workers: Array[Sprite2D] = []
 var active_crows: Array[Sprite2D] = []
+var greenhouse_workers: Array[Sprite2D] = []
+var volunteer_workers: Array[Sprite2D] = []
+
+# Сезоны, теплицы и волонтёры
+var current_season: int = GameManager.Season.SPRING
+var greenhouse_timer: float = 0.0
 
 # Частицы
 var particles_soil: CPUParticles2D
@@ -144,6 +155,11 @@ func _load_textures() -> void:
 	tex_barn = AssetGenerator.get_texture("barn.png")
 	tex_decorations = AssetGenerator.get_texture("decorations.png")
 	tex_weather_parts = AssetGenerator.get_texture("weather_particles.png")
+	tex_seasons_decor = AssetGenerator.get_texture("seasons_decorations.png")
+	tex_greenhouse = AssetGenerator.get_texture("greenhouse.png")
+	tex_greenhouse_crops = AssetGenerator.get_texture("greenhouse_crops.png")
+	tex_greenhouse_worker = AssetGenerator.get_texture("greenhouse_worker.png")
+	tex_volunteer = AssetGenerator.get_texture("volunteer.png")
 
 func _create_particles() -> void:
 	# Частицы земли / пыли
@@ -263,6 +279,28 @@ func _create_visual_nodes() -> void:
 		add_child(crow)
 		active_crows.append(crow)
 
+	# Работники теплиц (до 2 работников)
+	for i in range(2):
+		var gw: Sprite2D = Sprite2D.new()
+		gw.texture = tex_greenhouse_worker
+		gw.hframes = 4
+		gw.scale = Vector2(2.0, 2.0)
+		gw.centered = false
+		gw.visible = false
+		add_child(gw)
+		greenhouse_workers.append(gw)
+
+	# Волонтёры (2 добровольца в ярких жилетах)
+	for i in range(2):
+		var v: Sprite2D = Sprite2D.new()
+		v.texture = tex_volunteer
+		v.hframes = 4
+		v.scale = Vector2(2.0, 2.0)
+		v.centered = false
+		v.visible = false
+		add_child(v)
+		volunteer_workers.append(v)
+
 	# Всплывающий лейбл начисления денег
 	floating_label = Label.new()
 	floating_label.visible = false
@@ -275,8 +313,57 @@ func _create_visual_nodes() -> void:
 func _process(delta: float) -> void:
 	anim_timer += delta
 	_update_crows_interaction(delta)
+	_update_greenhouses(delta)
+	_update_volunteers_visuals(delta)
 	_update_fsm(delta)
 	queue_redraw()
+
+func set_season(s: int) -> void:
+	current_season = s
+	queue_redraw()
+
+func _update_greenhouses(delta: float) -> void:
+	if GameManager.greenhouse_count <= 0:
+		for gw in greenhouse_workers:
+			gw.visible = false
+		return
+
+	var gh_data: Dictionary = GameManager.get_current_greenhouse_data()
+	var growth_time: float = float(gh_data.get("growth_time", 25.0))
+	var speed_mod: float = 1.70 if GameManager.is_volunteers_active else 1.0
+	greenhouse_timer += delta * speed_mod
+
+	if greenhouse_timer >= growth_time:
+		greenhouse_timer = 0.0
+		var earned: int = GameManager.harvest_greenhouse()
+		if earned > 0:
+			_show_floating_coins(earned, " (%s)" % gh_data.get("name", "Теплица"))
+
+	# Анимация работников теплиц
+	for i in range(greenhouse_workers.size()):
+		var gw: Sprite2D = greenhouse_workers[i]
+		if i < GameManager.greenhouse_count:
+			gw.visible = true
+			var gh_x: float = 110.0 if i == 0 else (screen_width - 240.0)
+			gw.position = Vector2(gh_x + 22.0, GROUND_Y - 32.0)
+			gw.frame = int(anim_timer * 4.0 + i) % 4
+		else:
+			gw.visible = false
+
+func _update_volunteers_visuals(_delta: float) -> void:
+	if not GameManager.is_volunteers_active:
+		for v in volunteer_workers:
+			v.visible = false
+		return
+
+	for i in range(volunteer_workers.size()):
+		var v: Sprite2D = volunteer_workers[i]
+		v.visible = true
+		var wander_center: float = (screen_width * 0.35) if i == 0 else (screen_width * 0.70)
+		var wander_offset: float = sin(anim_timer * 1.5 + i * 2.0) * 120.0
+		v.position = Vector2(wander_center + wander_offset, GROUND_Y - 32.0)
+		v.flip_h = cos(anim_timer * 1.5 + i * 2.0) < 0
+		v.frame = int(anim_timer * 6.0 + i) % 4
 
 func _update_fsm(delta: float) -> void:
 	# 1. НОЧЬ: вся работа останавливается, сеятели и техника собираются у костра
@@ -315,8 +402,23 @@ func _update_fsm(delta: float) -> void:
 	if is_strike_active:
 		return
 
+	# Расход бензина работающей техникой
+	if has_active_vehicle:
+		GameManager.consume_fuel(delta * 0.75)
+
+	# Коэффициенты скорости: топливо, износ, волонтёры
+	var fuel_speed_mod: float = 1.0 if GameManager.fuel_level > 0.0 else 0.25
+	var avg_cond: float = GameManager.get_machinery_average_condition()
+	var durability_speed_mod: float = 1.0
+	if avg_cond < 30.0:
+		durability_speed_mod = 0.65
+	elif avg_cond < 60.0:
+		durability_speed_mod = 0.85
+
+	var volunteer_speed_mod: float = 1.70 if GameManager.is_volunteers_active else 1.0
+
 	# Стандартное движение FSM
-	var effective_speed: float = vehicle_speed * GameManager.speed_multiplier * weather_speed_mod
+	var effective_speed: float = vehicle_speed * GameManager.speed_multiplier * weather_speed_mod * fuel_speed_mod * durability_speed_mod * volunteer_speed_mod
 
 	match current_state:
 		State.PLOWING:
@@ -549,6 +651,20 @@ func _process_plowing(delta: float, speed: float) -> void:
 # 2. SOWING: Сев семян
 # ------------------------------------------------------------------------------
 func _start_sowing() -> void:
+	# Закупка партии семян на каждый цикл сева
+	var crop_data: Dictionary = GameManager.get_current_crop_data()
+	var seed_cost: int = int(crop_data.get("seed_cost", 10))
+	if GameManager.spend_coins(seed_cost):
+		_show_floating_coins(-seed_cost, " (Семена %s)" % crop_data.get("name", ""))
+	else:
+		# Если монет не хватает на текущую культуру, переключаемся на базовую пшеницу (5 монет)
+		if GameManager.spend_coins(5):
+			GameManager.current_crop = "wheat"
+			_show_floating_coins(-5, " (Семена Пшеница)")
+		else:
+			# Если в казне 0 монет - выдается аварийный пакет семян (0 монет) для предотвращения софтлока
+			GameManager.current_crop = "wheat"
+
 	if GameManager.has_seeder_tractor:
 		vehicle_sprite.visible = true
 		vehicle_sprite.texture = tex_tractor_seeder
@@ -831,6 +947,14 @@ func _finish_hauling_cycle() -> void:
 		final_reward += flour_bonus
 		bonus_text = " (Мука +%d)" % flour_bonus
 
+	# Сезонные цены (зимой дефицит и самая высокая цена +85%, весной +15%, осенью спад цен)
+	var season_mult: float = GameManager.get_season_price_multiplier()
+	final_reward = int(final_reward * season_mult)
+	if season_mult > 1.05:
+		bonus_text += " [Зима +%d%%]" % int((season_mult - 1.0) * 100.0)
+	elif season_mult < 0.95:
+		bonus_text += " [Осень -%d%%]" % int((1.0 - season_mult) * 100.0)
+
 	# Обработка финансов и выплат по долгам
 	var fin_res: Dictionary = GameManager.process_harvest_finances(final_reward)
 	GameManager.total_harvested += 1
@@ -864,7 +988,10 @@ func reset_field_to_start() -> void:
 	queue_redraw()
 
 func _show_floating_coins(amount: int, extra_text: String = "") -> void:
-	floating_label.text = "+%d 🪙%s" % [amount, extra_text]
+	if floating_label == null:
+		return
+	var sign_prefix = "+" if amount >= 0 else ""
+	floating_label.text = "%s%d 🪙%s" % [sign_prefix, amount, extra_text]
 	floating_label.position = Vector2(screen_width - 240, GROUND_Y - 50)
 	floating_label.visible = true
 	var tw: Tween = create_tween()
@@ -901,13 +1028,16 @@ func _draw() -> void:
 	if tex_soil == null or tex_crops == null:
 		return
 
-	# 1. Задний план: Декорации (забор, цветы, фонари, деревья)
+	# 1. Сезонный пейзаж (деревья, листва, снег, цветы)
+	_draw_seasonal_landscape()
+
+	# 2. Пользовательские декорации (забор, цветы, фонари)
 	_draw_decorations()
 
-	# 2. Постройки: Мельница, Амбар, Навесы
+	# 3. Постройки: Мельница, Амбар, Навесы, Теплицы
 	_draw_buildings()
 
-	# 3. Полоса земли
+	# 4. Полоса земли
 	for i in range(segment_count):
 		var sx: float = i * TILE_SIZE
 		var state_val: int = soil_segments[i]
@@ -915,7 +1045,18 @@ func _draw() -> void:
 		var dst_rect: Rect2 = Rect2(sx, GROUND_Y, TILE_SIZE, TILE_SIZE)
 		draw_texture_rect_region(tex_soil, dst_rect, src_rect)
 
-	# 4. Растения
+	# Зимняя кромка снега на поверхности почвы
+	if current_season == GameManager.Season.WINTER:
+		draw_rect(Rect2(0, GROUND_Y - 2.0, screen_width, 4.0), Color(0.92, 0.96, 1.0, 0.90), true)
+	elif current_season == GameManager.Season.AUTUMN:
+		# Осенняя опавшая листва вдоль кромки поля
+		var leaf_x: float = 20.0
+		while leaf_x < screen_width:
+			draw_rect(Rect2(leaf_x, GROUND_Y + 1.0, 3, 2), Color("df7126"), true)
+			draw_rect(Rect2(leaf_x + 14.0, GROUND_Y + 2.0, 3, 2), Color("d9a066"), true)
+			leaf_x += 42.0
+
+	# 5. Растения
 	var crop_data: Dictionary = GameManager.get_current_crop_data()
 	var row_idx: int = int(crop_data.get("row_index", 0))
 
@@ -933,7 +1074,7 @@ func _draw() -> void:
 			var dst_crop: Rect2 = Rect2(px + sway, GROUND_Y - TILE_SIZE + 4.0, TILE_SIZE, TILE_SIZE)
 			draw_texture_rect_region(tex_crops, dst_crop, src_crop)
 
-	# 5. Пугала (до 3 шт на монитор, расставляются равномерно)
+	# 6. Пугала (до 3 шт на монитор, расставляются равномерно)
 	if GameManager.scarecrow_count > 0 and tex_crisis != null:
 		var count: int = GameManager.scarecrow_count
 		for s in range(count):
@@ -941,27 +1082,48 @@ func _draw() -> void:
 			var scare_rect: Rect2 = Rect2(80, 0, 16, 16)
 			draw_texture_rect_region(tex_crisis, Rect2(scare_x, GROUND_Y - 32.0, 32, 32), scare_rect)
 
-	# 6. Сторожевой пес
+	# 7. Сторожевой пес
 	if GameManager.has_guard_dog and tex_crisis != null:
 		var dog_frame: int = int(anim_timer * 4.0) % 2
 		var dog_rect: Rect2 = Rect2(96 + dog_frame * 16, 0, 16, 16)
 		draw_texture_rect_region(tex_crisis, Rect2(screen_width - 160.0, GROUND_Y - 30.0, 32, 32), dog_rect)
 
+func _draw_seasonal_landscape() -> void:
+	if tex_seasons_decor == null:
+		return
+
+	# Выбор текстуры дерева по текущему сезону (0=Весна, 1=Лето, 2=Осень, 3=Зима)
+	var season_frame: int = int(current_season) % 4
+	var tree_src: Rect2 = Rect2(season_frame * 32, 0, 32, 32)
+
+	# Равномерно расставляем сезонные деревья на заднем плане
+	var tree_step: float = 340.0
+	var tree_x: float = 160.0
+	while tree_x < screen_width - 160.0:
+		# Небольшое покачивание ветвей
+		var tree_sway: float = sin(anim_timer * 2.0 + tree_x * 0.05) * 1.5
+		draw_texture_rect_region(tex_seasons_decor, Rect2(tree_x + tree_sway, GROUND_Y - 60.0, 48, 48), tree_src)
+		tree_x += tree_step
+
 func _draw_buildings() -> void:
-	# Мельница (слева на X = 60)
+	var is_winter: bool = (current_season == GameManager.Season.WINTER)
+
+	# Мельница (слева на X = 40)
 	if GameManager.has_windmill and tex_windmill != null:
-		# Башня мельницы (32x48 на масштаб 1.5x = 48x72)
 		var mill_base: Rect2 = Rect2(0, 0, 32, 48)
 		draw_texture_rect_region(tex_windmill, Rect2(40.0, GROUND_Y - 54.0, 36, 54), mill_base)
-		# Вращающиеся лопасти (2 кадра)
 		var blade_frame: int = int(anim_timer * 4.0) % 2
 		var blade_src: Rect2 = Rect2(32 + blade_frame * 32, 0, 32, 32)
 		draw_texture_rect_region(tex_windmill, Rect2(42.0, GROUND_Y - 66.0, 32, 32), blade_src)
+		if is_winter:
+			draw_rect(Rect2(40.0, GROUND_Y - 55.0, 36, 4), Color(0.95, 0.98, 1.0, 0.92), true)
 
 	# Амбар (справа на X = screen_width - 120)
 	if GameManager.has_barn and tex_barn != null:
 		var barn_src: Rect2 = Rect2(0, 0, 48, 36)
 		draw_texture_rect_region(tex_barn, Rect2(screen_width - 110.0, GROUND_Y - 42.0, 56, 42), barn_src)
+		if is_winter:
+			draw_rect(Rect2(screen_width - 110.0, GROUND_Y - 43.0, 56, 4), Color(0.95, 0.98, 1.0, 0.92), true)
 
 	# Навесы от дождя/града
 	if GameManager.canopy_count > 0 and tex_canopy != null:
@@ -969,6 +1131,24 @@ func _draw_buildings() -> void:
 			var canopy_x: float = 240.0 + c * 400.0
 			var canopy_src: Rect2 = Rect2(0, 0, 48, 32)
 			draw_texture_rect_region(tex_canopy, Rect2(canopy_x, GROUND_Y - 38.0, 56, 38), canopy_src)
+			if is_winter:
+				draw_rect(Rect2(canopy_x, GROUND_Y - 39.0, 56, 4), Color(0.95, 0.98, 1.0, 0.92), true)
+
+	# Теплицы (круглогодичный урожай, стоят на поле)
+	if GameManager.greenhouse_count > 0 and tex_greenhouse != null:
+		for g in range(GameManager.greenhouse_count):
+			var gh_x: float = 110.0 if g == 0 else (screen_width - 240.0)
+			# Конструкция теплицы
+			draw_texture_rect_region(tex_greenhouse, Rect2(gh_x, GROUND_Y - 44.0, 68, 44), Rect2(0, 0, 56, 36))
+			# Снежная шапка на арочной крыше зимой
+			if is_winter:
+				draw_rect(Rect2(gh_x + 6.0, GROUND_Y - 45.0, 56, 4), Color(0.94, 0.97, 1.0, 0.88), true)
+
+			# Иконка текущей выращиваемой экзотической культуры над теплицей
+			if tex_greenhouse_crops != null:
+				var gh_info: Dictionary = GameManager.get_current_greenhouse_data()
+				var c_frame: int = int(gh_info.get("frame", 0))
+				draw_texture_rect_region(tex_greenhouse_crops, Rect2(gh_x + 24.0, GROUND_Y - 60.0, 20, 20), Rect2(c_frame * 16, 0, 16, 16))
 
 func _draw_decorations() -> void:
 	if GameManager.active_decoration == "none" or tex_decorations == null:

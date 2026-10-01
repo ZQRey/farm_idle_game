@@ -13,6 +13,8 @@ signal fps_changed(fps: int)
 signal quit_requested
 signal resolve_strike_requested
 signal call_mechanic_requested
+signal police_fine_requested
+signal police_bribe_requested
 
 var status_indicator: StatusIndicator
 var context_menu: PopupMenu
@@ -23,7 +25,9 @@ var is_paused: bool = false
 # Динамическое состояние кризисов для контекстного меню
 var is_strike_active: bool = false
 var is_breakdown_active: bool = false
+var is_police_active: bool = false
 var weather_string: String = "Ясно ☀"
+var season_string: String = "Весна 🌱"
 
 func _ready() -> void:
 	_create_context_menu()
@@ -91,10 +95,19 @@ func _rebuild_context_menu() -> void:
 			context_menu.set_item_disabled(context_menu.get_item_index(301), true)
 		else:
 			context_menu.add_item("🔧 Вызвать аварийный ремонт (30 🪙)", 301)
+	if is_police_active:
+		var fine_c: int = 40 if GameManager.has_guard_dog else 80
+		var bribe_c: int = max(10, int(GameManager.coins * 0.10))
+		context_menu.add_item("📋 Оплатить штраф полиции (%d 🪙)" % fine_c, 302)
+		context_menu.add_item("🤝 Дать взятку инспектору 10%% (%d 🪙)" % bribe_c, 303)
 
 	context_menu.add_separator()
+	context_menu.add_item("🗓 Сезон: " + season_string, 111)
+	context_menu.set_item_disabled(context_menu.get_item_index(111), true)
 	context_menu.add_item("🌤 Погода: " + weather_string, 110)
 	context_menu.set_item_disabled(context_menu.get_item_index(110), true)
+	context_menu.add_item("⛽ Топливо: %.0f / %.0f л" % [GameManager.fuel_level, GameManager.max_fuel], 112)
+	context_menu.set_item_disabled(context_menu.get_item_index(112), true)
 
 	# Пауза
 	context_menu.add_check_item("⏸ Пауза", 101)
@@ -149,6 +162,10 @@ func _on_context_menu_item_pressed(id: int) -> void:
 			resolve_strike_requested.emit()
 		301:
 			call_mechanic_requested.emit()
+		302:
+			police_fine_requested.emit()
+		303:
+			police_bribe_requested.emit()
 		999:
 			quit_requested.emit()
 			get_tree().quit()
