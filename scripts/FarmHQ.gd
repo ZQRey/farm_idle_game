@@ -10,6 +10,7 @@ signal graphics_mode_selected(mode: String)
 signal fps_selected(fps: int)
 signal tractor_color_changed(color: Color)
 signal repair_requested
+signal bankruptcy_requested
 
 # UI ноды
 @onready var coins_label: Label = $VBox/Header/HBoxCoins/CoinsValue
@@ -41,11 +42,23 @@ signal repair_requested
 @onready var check_32bit: CheckBox = $VBox/TabContainer/Настройки/VBoxSettings/HBoxGraphics/Check32bit
 @onready var opt_fps: OptionButton = $VBox/TabContainer/Настройки/VBoxSettings/HBoxFps/OptFps
 
+# Финансы
+@onready var lbl_total_debt: Label = $VBox/TabContainer/Финансы/VBoxFinances/HBoxDebtSummary/LblTotalDebt
+@onready var lbl_subsidy_debt: Label = $VBox/TabContainer/Финансы/VBoxFinances/SubsidyBox/HBoxActions/LblSubsidyDebt
+@onready var btn_take_subsidy: Button = $VBox/TabContainer/Финансы/VBoxFinances/SubsidyBox/HBoxActions/BtnTakeSubsidy
+@onready var btn_repay_subsidy: Button = $VBox/TabContainer/Финансы/VBoxFinances/SubsidyBox/HBoxActions/BtnRepaySubsidy
+@onready var lbl_loan_debt: Label = $VBox/TabContainer/Финансы/VBoxFinances/LoanBox/HBoxActions/LblLoanDebt
+@onready var btn_take_loan: Button = $VBox/TabContainer/Финансы/VBoxFinances/LoanBox/HBoxActions/BtnTakeLoan
+@onready var btn_repay_loan: Button = $VBox/TabContainer/Финансы/VBoxFinances/LoanBox/HBoxActions/BtnRepayLoan
+@onready var btn_bankruptcy: Button = $VBox/TabContainer/Финансы/VBoxFinances/BankruptcyBox/BtnBankruptcy
+@onready var bankruptcy_dialog: ConfirmationDialog = $BankruptcyDialog
+
 # Статистика
 @onready var lbl_stat_coins: Label = $VBox/TabContainer/Статистика/VBoxStats/Grid/StatCoinsVal
 @onready var lbl_stat_harvests: Label = $VBox/TabContainer/Статистика/VBoxStats/Grid/StatHarvestsVal
 @onready var lbl_stat_strikes: Label = $VBox/TabContainer/Статистика/VBoxStats/Grid/StatStrikesVal
 @onready var lbl_stat_repairs: Label = $VBox/TabContainer/Статистика/VBoxStats/Grid/StatRepairsVal
+@onready var lbl_stat_bankruptcies: Label = $VBox/TabContainer/Статистика/VBoxStats/Grid/StatBankruptciesVal
 @onready var lbl_repair_status: Label = $VBox/TabContainer/Статистика/VBoxStats/HBoxRepairAction/RepairStatusLbl
 @onready var btn_stat_call_repair: Button = $VBox/TabContainer/Статистика/VBoxStats/HBoxRepairAction/BtnStatCallRepair
 
@@ -67,6 +80,7 @@ func _ready() -> void:
 	_setup_graphics_and_fps()
 	_setup_garage_and_decor()
 	_setup_upgrades_tab()
+	_setup_finances_tab()
 	_setup_repair_buttons()
 	_refresh_seeds_ui()
 	_update_ui()
@@ -181,6 +195,27 @@ func _update_ui() -> void:
 		lbl_stat_strikes.text = "%d" % GameManager.total_strikes_resolved
 	if lbl_stat_repairs != null:
 		lbl_stat_repairs.text = "%d" % GameManager.total_repairs_done
+	if lbl_stat_bankruptcies != null:
+		lbl_stat_bankruptcies.text = "%d" % GameManager.total_bankruptcies
+
+	# Финансы
+	if lbl_total_debt != null:
+		lbl_total_debt.text = "%d 🪙" % GameManager.get_total_debt()
+	if lbl_subsidy_debt != null:
+		lbl_subsidy_debt.text = "Остаток долга: %d 🪙" % GameManager.subsidy_debt
+	if btn_take_subsidy != null:
+		btn_take_subsidy.disabled = (GameManager.subsidy_debt > 0)
+	if btn_repay_subsidy != null:
+		btn_repay_subsidy.disabled = (GameManager.subsidy_debt <= 0) or (GameManager.coins < GameManager.subsidy_debt)
+		btn_repay_subsidy.text = "Погасить (%d 🪙)" % GameManager.subsidy_debt if GameManager.subsidy_debt > 0 else "Погасить досрочно"
+
+	if lbl_loan_debt != null:
+		lbl_loan_debt.text = "Остаток долга: %d 🪙" % GameManager.loan_debt
+	if btn_take_loan != null:
+		btn_take_loan.disabled = (GameManager.loan_debt > 0)
+	if btn_repay_loan != null:
+		btn_repay_loan.disabled = (GameManager.loan_debt <= 0) or (GameManager.coins < GameManager.loan_debt)
+		btn_repay_loan.text = "Погасить (%d 🪙)" % GameManager.loan_debt if GameManager.loan_debt > 0 else "Погасить досрочно"
 
 func _refresh_seeds_ui() -> void:
 	if seed_container == null:
@@ -392,3 +427,43 @@ func _setup_graphics_and_fps() -> void:
 		SettingsManager.set_fps_limit(target_fps)
 		fps_selected.emit(target_fps)
 	)
+
+func _setup_finances_tab() -> void:
+	if btn_take_subsidy != null:
+		btn_take_subsidy.pressed.connect(func():
+			if GameManager.take_subsidy():
+				_update_ui()
+		)
+
+	if btn_repay_subsidy != null:
+		btn_repay_subsidy.pressed.connect(func():
+			if GameManager.repay_subsidy_early():
+				_update_ui()
+		)
+
+	if btn_take_loan != null:
+		btn_take_loan.pressed.connect(func():
+			if GameManager.take_bank_loan():
+				_update_ui()
+		)
+
+	if btn_repay_loan != null:
+		btn_repay_loan.pressed.connect(func():
+			if GameManager.repay_loan_early():
+				_update_ui()
+		)
+
+	if btn_bankruptcy != null and bankruptcy_dialog != null:
+		btn_bankruptcy.pressed.connect(func():
+			bankruptcy_dialog.popup_centered()
+		)
+		bankruptcy_dialog.confirmed.connect(func():
+			GameManager.declare_bankruptcy()
+			bankruptcy_requested.emit()
+			if opt_decor != null:
+				opt_decor.selected = 0
+			_refresh_seeds_ui()
+			_update_decor_ui()
+			_update_ui()
+		)
+

@@ -603,20 +603,38 @@ func _finish_hauling_cycle() -> void:
 		final_reward += flour_bonus
 		bonus_text = " (Мука +%d)" % flour_bonus
 
-	GameManager.add_coins(final_reward)
+	# Обработка финансов и выплат по долгам
+	var fin_res: Dictionary = GameManager.process_harvest_finances(final_reward)
 	GameManager.total_harvested += 1
 
-	_show_floating_coins(final_reward, bonus_text)
+	var debt_paid: int = fin_res.subsidy_paid + fin_res.loan_paid
+	if debt_paid > 0:
+		bonus_text += " [Долг: -%d]" % debt_paid
+
+	_show_floating_coins(fin_res.net_coins, bonus_text)
 
 	soil_segments.fill(0)
 	crop_stages.fill(-1)
 
-	harvest_completed.emit(final_reward)
+	harvest_completed.emit(fin_res.net_coins)
 	change_state(State.PLOWING)
+
+func reset_field_to_start() -> void:
+	soil_segments.fill(0)
+	crop_stages.fill(-1)
+	for w in seeder_workers:
+		w.visible = false
+	for rw in resting_workers:
+		rw.visible = false
+	smoke_fire_sprite.visible = false
+	mud_splash_sprite.visible = false
+	campfire_sprite.visible = false
+	change_state(State.PLOWING)
+	queue_redraw()
 
 func _show_floating_coins(amount: int, extra_text: String = "") -> void:
 	floating_label.text = "+%d 🪙%s" % [amount, extra_text]
-	floating_label.position = Vector2(screen_width - 220, GROUND_Y - 50)
+	floating_label.position = Vector2(screen_width - 240, GROUND_Y - 50)
 	floating_label.visible = true
 	var tw: Tween = create_tween()
 	tw.tween_property(floating_label, "position:y", GROUND_Y - 80, 1.6)

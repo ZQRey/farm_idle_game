@@ -348,6 +348,14 @@ text = "Выполнено ремонтов техники:"
 layout_mode = 2
 text = "0"
 
+[node name="StatBankruptciesLbl" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/Grid"]
+layout_mode = 2
+text = "Объявлено банкротств:"
+
+[node name="StatBankruptciesVal" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/Grid"]
+layout_mode = 2
+text = "0"
+
 [node name="HSeparator" type="HSeparator" parent="VBox/TabContainer/Статистика/VBoxStats"]
 layout_mode = 2
 
@@ -364,3 +372,140 @@ custom_minimum_size = Vector2(230, 38)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.984314, 0.94902, 0.211765, 1)
 text = "🔧 Вызвать ремонт (30 🪙)"
+
+[node name="Финансы" type="MarginContainer" parent="VBox/TabContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+metadata/_tab_index = 5
+
+[node name="VBoxFinances" type="VBoxContainer" parent="VBox/TabContainer/Финансы"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="HBoxDebtSummary" type="HBoxContainer" parent="VBox/TabContainer/Финансы/VBoxFinances"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBox/TabContainer/Финансы/VBoxFinances/HBoxDebtSummary"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 16
+text = "Общая кредитная задолженность:"
+
+[node name="LblTotalDebt" type="Label" parent="VBox/TabContainer/Финансы/VBoxFinances/HBoxDebtSummary"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.984314, 0.35, 0.35, 1)
+theme_override_font_sizes/font_size = 18
+text = "0 🪙"
+
+[node name="HSeparator1" type="HSeparator" parent="VBox/TabContainer/Финансы/VBoxFinances"]
+layout_mode = 2
+
+[node name="SubsidyBox" type="VBoxContainer" parent="VBox/TabContainer/Финансы/VBoxFinances"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="VBox/TabContainer/Финансы/VBoxFinances/SubsidyBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "🏛 Государственная субсидия АПК (Льготная ставка 5%)"
+
+[node name="Desc" type="Label" parent="VBox/TabContainer/Финансы/VBoxFinances/SubsidyBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.75, 0.75, 1)
+text = "Выдается: 500 🪙 (к возврату: 525 🪙). Удержание 10% с выручки каждого урожая."
+
+[node name="HBoxActions" type="HBoxContainer" parent="VBox/TabContainer/Финансы/VBoxFinances/SubsidyBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="LblSubsidyDebt" type="Label" parent="VBox/TabContainer/Финансы/VBoxFinances/SubsidyBox/HBoxActions"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Остаток долга: 0 🪙"
+
+[node name="BtnTakeSubsidy" type="Button" parent="VBox/TabContainer/Финансы/VBoxFinances/SubsidyBox/HBoxActions"]
+custom_minimum_size = Vector2(170, 34)
+layout_mode = 2
+text = "Взять 500 🪙"
+
+[node name="BtnRepaySubsidy" type="Button" parent="VBox/TabContainer/Финансы/VBoxFinances/SubsidyBox/HBoxActions"]
+custom_minimum_size = Vector2(170, 34)
+layout_mode = 2
+text = "Погасить досрочно"
+
+[node name="HSeparator2" type="HSeparator" parent="VBox/TabContainer/Финансы/VBoxFinances"]
+layout_mode = 2
+
+[node name="LoanBox" type="VBoxContainer" parent="VBox/TabContainer/Финансы/VBoxFinances"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="VBox/TabContainer/Финансы/VBoxFinances/LoanBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "💳 Коммерческий кредит «Агро-Банк» (Ставка 20%)"
+
+[node name="Desc" type="Label" parent="VBox/TabContainer/Финансы/VBoxFinances/LoanBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.75, 0.75, 1)
+text = "Выдается: 1000 🪙 (к возврату: 1200 🪙). Удержание 25% с выручки каждого урожая."
+
+[node name="HBoxActions" type="HBoxContainer" parent="VBox/TabContainer/Финансы/VBoxFinances/LoanBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="LblLoanDebt" type="Label" parent="VBox/TabContainer/Финансы/VBoxFinances/LoanBox/HBoxActions"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Остаток долга: 0 🪙"
+
+[node name="BtnTakeLoan" type="Button" parent="VBox/TabContainer/Финансы/VBoxFinances/LoanBox/HBoxActions"]
+custom_minimum_size = Vector2(170, 34)
+layout_mode = 2
+text = "Взять 1000 🪙"
+
+[node name="BtnRepayLoan" type="Button" parent="VBox/TabContainer/Финансы/VBoxFinances/LoanBox/HBoxActions"]
+custom_minimum_size = Vector2(170, 34)
+layout_mode = 2
+text = "Погасить досрочно"
+
+[node name="HSeparator3" type="HSeparator" parent="VBox/TabContainer/Финансы/VBoxFinances"]
+layout_mode = 2
+
+[node name="BankruptcyBox" type="VBoxContainer" parent="VBox/TabContainer/Финансы/VBoxFinances"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="VBox/TabContainer/Финансы/VBoxFinances/BankruptcyBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.984314, 0.4, 0.4, 1)
+theme_override_font_sizes/font_size = 15
+text = "🚨 Процедура банкротства"
+
+[node name="Desc" type="Label" parent="VBox/TabContainer/Финансы/VBoxFinances/BankruptcyBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.75, 0.75, 1)
+text = "Полное списание всех долгов и перезапуск фермы с чистого листа (стартовые 100 🪙)."
+
+[node name="BtnBankruptcy" type="Button" parent="VBox/TabContainer/Финансы/VBoxFinances/BankruptcyBox"]
+custom_minimum_size = Vector2(280, 38)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_colors/font_color = Color(0.984314, 0.35, 0.35, 1)
+text = "🛑 Объявить себя банкротом (Начать сначала)"
+
+[node name="BankruptcyDialog" type="ConfirmationDialog" parent="."]
+title = "Подтверждение банкротства"
+initial_position = 2
+size = Vector2i(450, 160)
+dialog_text = "Вы действительно хотите объявить ферму банкротом?
+
+Все долги по субсидиям и кредитам будут полностью списаны!
+Прогресс, апгрейды и культуры будут сброшены к началу игры (100 🪙)."
+ok_button_text = "Да, объявить банкротство"
+cancel_button_text = "Отмена"
+

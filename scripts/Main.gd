@@ -54,6 +54,7 @@ func _ready() -> void:
 	farm_hq.tractor_color_changed.connect(_on_tractor_color_changed)
 	farm_hq.fps_selected.connect(_on_fps_changed)
 	farm_hq.repair_requested.connect(_on_call_mechanic)
+	farm_hq.bankruptcy_requested.connect(_on_bankruptcy_requested)
 
 	# 8. Подключение сигналов поля и событий
 	field.harvest_completed.connect(_on_harvest_completed)
@@ -122,3 +123,10 @@ func _on_resolve_strike() -> void:
 func _on_call_mechanic() -> void:
 	event_manager.call_mechanic()
 	farm_hq._update_ui()
+
+func _on_bankruptcy_requested() -> void:
+	field.reset_field_to_start()
+	event_manager.reset_all_events()
+	farm_hq._update_ui()
+	print("[Main] Ферма объявила банкротство: долги списаны, поле и техника сброшены!")
+

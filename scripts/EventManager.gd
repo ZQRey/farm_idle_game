@@ -309,3 +309,18 @@ func _process_repair_service(delta: float) -> void:
 			tw.tween_callback(func(): repair_pickup.visible = false)
 			print("[EventManager] Техника полностью отремонтирована и возвращена в строй!")
 			breakdown_resolved.emit()
+
+func reset_all_events() -> void:
+	is_strike_active = false
+	strike_timer = 0.0
+	if strike_poster != null:
+		strike_poster.visible = false
+	is_breakdown_active = false
+	is_repairing = false
+	repair_timer = 0.0
+	if repair_pickup != null:
+		repair_pickup.visible = false
+	current_weather = Weather.CLEAR
+	weather_timer = 0.0
+	weather_changed.emit(Weather.CLEAR, "Ясно ☀️")
+
