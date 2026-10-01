@@ -26,6 +26,7 @@ func _ready() -> void:
 	SettingsManager.load_settings()
 	GameManager.init_from_settings()
 	ContractManager.init_from_settings()
+	farm_hq._update_ui()
 
 	# 2. Ограничение FPS (по умолчанию 30 FPS для минимальной нагрузки)
 	var fps_limit: int = SettingsManager.get_fps_limit()
