@@ -65,8 +65,8 @@ static func init_from_settings() -> void:
 
 	var saved_offers: Variant = SettingsManager.config.get_value("contracts", "offers", [])
 	var saved_active: Variant = SettingsManager.config.get_value("contracts", "active", [])
-	offers = saved_offers.duplicate(true) if saved_offers is Array else []
-	active_contracts = saved_active.duplicate(true) if saved_active is Array else []
+	offers = saved_offers.duplicate(true) if typeof(saved_offers) == TYPE_ARRAY else []
+	active_contracts = saved_active.duplicate(true) if typeof(saved_active) == TYPE_ARRAY else []
 
 	board_refresh_at = int(SettingsManager.config.get_value("contracts", "board_refresh_at", 0))
 	next_contract_id = max(1, int(SettingsManager.config.get_value("contracts", "next_id", 1)))
