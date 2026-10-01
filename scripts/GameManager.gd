@@ -347,6 +347,21 @@ static func spend_coins(amount: int) -> bool:
 static func get_current_crop_data() -> Dictionary:
 	return CROPS.get(current_crop, CROPS["wheat"])
 
+## Фиксированная базовая цена склада для v0.4.
+## Динамические рыночные колебания будут добавлены отдельным MarketManager в v0.5.
+static func calculate_crop_sale_value(crop_id: String, amount_kg: float) -> int:
+	if amount_kg <= 0.0:
+		return 0
+	var data: Dictionary = CROPS.get(crop_id, CROPS["wheat"])
+	var value: float = float(data.get("base_reward", 40)) * (amount_kg / 100.0)
+
+	if has_barn:
+		value *= 1.20
+	if has_windmill:
+		value *= 1.50
+	value *= get_season_price_multiplier()
+	return max(0, int(round(value)))
+
 # ==============================================================================
 # ТОПЛИВНАЯ СИСТЕМА
 # ==============================================================================
@@ -520,52 +535,71 @@ static func repay_loan_early() -> bool:
 		return true
 	return false
 
-## Автоматический расчет выручки, зарплат, топлива и погашения долгов
-static func process_harvest_finances(gross_reward: int) -> Dictionary:
-	var net_coins: int = gross_reward
-	var subsidy_payment: int = 0
-	var loan_payment: int = 0
+## Производственные расходы одного завершённого цикла поля.
+## Они списываются независимо от того, продан урожай сразу или оставлен на складе.
+static func process_production_costs() -> Dictionary:
 	var salary_payment: int = 0
 	var fuel_payment: int = 0
 
-	# 1. Выплата зарплаты рабочим и водителям техники
 	var base_salary: int = 14 + (0 if has_seeder_tractor else 12) + (greenhouse_count * 8)
-	salary_payment = min(net_coins, base_salary)
-	net_coins -= salary_payment
+	salary_payment = min(coins, base_salary)
+	coins -= salary_payment
 	total_salaries_paid += salary_payment
 
-	# 2. 10% с выручки на субсидию
+	if auto_refuel and fuel_level < 25.0:
+		var needed: float = max_fuel - fuel_level
+		var fuel_cost: int = int(needed * 1.1)
+		if coins >= fuel_cost:
+			coins -= fuel_cost
+			fuel_payment = fuel_cost
+			fuel_level = max_fuel
+			total_fuel_spent += fuel_cost
+
+	degrade_durability()
+	save_to_settings()
+	return {
+		"salary_paid": salary_payment,
+		"fuel_paid": fuel_payment,
+		"total_cost": salary_payment + fuel_payment
+	}
+
+## Обработка фактической продажи урожая: погашение долгов идёт только с реальной выручки.
+static func process_sale_finances(gross_reward: int) -> Dictionary:
+	var net_coins: int = max(0, gross_reward)
+	var subsidy_payment: int = 0
+	var loan_payment: int = 0
+
 	if subsidy_debt > 0:
 		subsidy_payment = min(subsidy_debt, int(gross_reward * 0.10))
 		subsidy_debt -= subsidy_payment
 		net_coins -= subsidy_payment
 
-	# 3. 25% с выручки на банковский кредит
 	if loan_debt > 0:
 		loan_payment = min(loan_debt, int(gross_reward * 0.25))
 		loan_debt -= loan_payment
 		net_coins -= loan_payment
 
-	# 4. Автоматическая дозаправка топлива при необходимости
-	if auto_refuel and fuel_level < 25.0:
-		var needed: float = max_fuel - fuel_level
-		var fuel_cost: int = int(needed * 1.1)
-		if net_coins >= fuel_cost:
-			net_coins -= fuel_cost
-			fuel_payment = fuel_cost
-			fuel_level = max_fuel
-			total_fuel_spent += fuel_cost
-
+	net_coins = max(0, net_coins)
 	add_coins(net_coins)
-	degrade_durability()
 	save_to_settings()
-
 	return {
+		"gross_coins": gross_reward,
 		"net_coins": net_coins,
-		"salary_paid": salary_payment,
 		"subsidy_paid": subsidy_payment,
 		"loan_paid": loan_payment,
-		"fuel_paid": fuel_payment,
+		"total_debt_remaining": get_total_debt()
+	}
+
+## Совместимый wrapper для старых вызовов.
+static func process_harvest_finances(gross_reward: int) -> Dictionary:
+	var production: Dictionary = process_production_costs()
+	var sale: Dictionary = process_sale_finances(gross_reward)
+	return {
+		"net_coins": int(sale.get("net_coins", 0)) - int(production.get("total_cost", 0)),
+		"salary_paid": int(production.get("salary_paid", 0)),
+		"subsidy_paid": int(sale.get("subsidy_paid", 0)),
+		"loan_paid": int(sale.get("loan_paid", 0)),
+		"fuel_paid": int(production.get("fuel_paid", 0)),
 		"total_debt_remaining": get_total_debt()
 	}
 
