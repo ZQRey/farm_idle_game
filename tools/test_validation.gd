@@ -6,6 +6,7 @@ const WindowManager = preload("res://scripts/WindowManager.gd")
 const GameManager = preload("res://scripts/GameManager.gd")
 const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const ContractManager = preload("res://scripts/ContractManager.gd")
+const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 
@@ -14,6 +15,7 @@ func _init() -> void:
 	SettingsManager.load_settings()
 	GameManager.init_from_settings()
 	ContractManager.init_from_settings()
+	InventoryManager.init_from_settings()
 
 	# 1. Тест: Множитель прибыли от мониторов
 	print("\n[ТЕСТ 1] Проверка множителя прибыли от мониторов:")
@@ -222,6 +224,56 @@ func _init() -> void:
 	ContractManager.total_failed = old_failed
 	ContractManager.total_contract_coins = old_contract_coins
 	ContractManager.save_to_settings()
+
+	# 8. Тест: склад, переполнение и persistence
+	print("\n[ТЕСТ 8] Проверка склада урожая:")
+	var old_stock: Dictionary = InventoryManager.stock.duplicate(true)
+	var old_storage_level: int = InventoryManager.storage_level
+	var old_auto_sell: bool = InventoryManager.auto_sell_on_harvest
+	var old_total_stored: float = InventoryManager.total_harvest_stored_kg
+	var old_total_overflow: float = InventoryManager.total_overflow_kg
+
+	InventoryManager.stock = {
+		"wheat": 0.0,
+		"corn": 0.0,
+		"sunflower": 0.0,
+		"carrot": 0.0
+	}
+	InventoryManager.storage_level = 1
+	InventoryManager.auto_sell_on_harvest = false
+	InventoryManager.total_harvest_stored_kg = 0.0
+	InventoryManager.total_overflow_kg = 0.0
+
+	var deposit_a: Dictionary = InventoryManager.deposit_crop("wheat", 400.0)
+	assert(is_equal_approx(float(deposit_a.get("stored_kg", 0.0)), 400.0), "400 кг пшеницы должны полностью поместиться")
+	assert(is_equal_approx(InventoryManager.get_total_stock(), 400.0), "На складе должно быть 400 кг")
+
+	var deposit_b: Dictionary = InventoryManager.deposit_crop("corn", 200.0)
+	assert(is_equal_approx(float(deposit_b.get("stored_kg", 0.0)), 100.0), "При ёмкости 500 кг должно сохраниться только 100 кг кукурузы")
+	assert(is_equal_approx(float(deposit_b.get("overflow_kg", 0.0)), 100.0), "Оставшиеся 100 кг должны считаться переполнением")
+	assert(is_equal_approx(InventoryManager.get_total_stock(), 500.0), "Склад должен быть заполнен ровно до 500 кг")
+
+	var removed_kg: float = InventoryManager.remove_crop("wheat", 100.0)
+	assert(is_equal_approx(removed_kg, 100.0), "Должно продаваться/изыматься 100 кг")
+	assert(is_equal_approx(InventoryManager.get_stock("wheat"), 300.0), "После изъятия должно остаться 300 кг пшеницы")
+	assert(is_equal_approx(InventoryManager.get_free_capacity(), 100.0), "После изъятия должно освободиться 100 кг ёмкости")
+
+	InventoryManager.save_to_settings()
+	InventoryManager.stock = {}
+	InventoryManager.storage_level = 4
+	InventoryManager.init_from_settings()
+	assert(InventoryManager.storage_level == 1, "Уровень склада должен восстановиться до 1")
+	assert(is_equal_approx(InventoryManager.get_stock("wheat"), 300.0), "Запас пшеницы должен восстановиться")
+	assert(is_equal_approx(InventoryManager.get_stock("corn"), 100.0), "Запас кукурузы должен восстановиться")
+	print("  ✔ ТЕСТ 8 УСПЕШНО ПРОЙДЕН!")
+
+	# Возвращаем складское состояние пользователя.
+	InventoryManager.stock = old_stock
+	InventoryManager.storage_level = old_storage_level
+	InventoryManager.auto_sell_on_harvest = old_auto_sell
+	InventoryManager.total_harvest_stored_kg = old_total_stored
+	InventoryManager.total_overflow_kg = old_total_overflow
+	InventoryManager.save_to_settings()
 
 	print("\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ! СИСТЕМА ПОЛНОСТЬЮ ИСПРАВНА!")
 	quit(0)
