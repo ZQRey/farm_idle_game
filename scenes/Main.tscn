@@ -1,0 +1,39 @@
+[gd_scene load_steps=8 format=3 uid="uid://c6xq5b7r4y321"]
+
+[ext_resource type="Script" path="res://scripts/Main.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/TrayManager.gd" id="2_tray"]
+[ext_resource type="PackedScene" path="res://scenes/Field.tscn" id="3_field"]
+[ext_resource type="Script" path="res://scripts/EventManager.gd" id="4_event"]
+[ext_resource type="PackedScene" path="res://scenes/FarmHQ.tscn" id="5_farmhq"]
+[ext_resource type="Shader" path="res://shaders/retro_16bit.gdshader" id="6_shader"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_retro"]
+shader = ExtResource("6_shader")
+shader_parameter/enabled = false
+shader_parameter/color_depth = 16.0
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="TrayManager" type="Node" parent="."]
+script = ExtResource("2_tray")
+
+[node name="Field" parent="." instance=ExtResource("3_field")]
+
+[node name="EventManager" type="Node" parent="." node_paths=PackedStringArray("field_fsm")]
+script = ExtResource("4_event")
+field_fsm = NodePath("../Field")
+
+[node name="FarmHQ" parent="." instance=ExtResource("5_farmhq")]
+
+[node name="RetroCanvasLayer" type="CanvasLayer" parent="."]
+layer = 100
+
+[node name="RetroRect" type="ColorRect" parent="RetroCanvasLayer"]
+material = SubResource("ShaderMaterial_retro")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2

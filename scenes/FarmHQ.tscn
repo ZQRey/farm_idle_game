@@ -1,0 +1,366 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/FarmHQ.gd" id="1_farmhq"]
+
+[node name="FarmHQ" type="Window"]
+title = "🌾 Штаб фермы - Управление и Магазин"
+initial_position = 2
+size = Vector2i(620, 520)
+visible = false
+wrap_controls = true
+script = ExtResource("1_farmhq")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+text = "🌾 Агрокомплекс «Урожай»"
+
+[node name="BtnEmergencyRepair" type="Button" parent="VBox/Header"]
+custom_minimum_size = Vector2(210, 34)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.984314, 0.94902, 0.211765, 1)
+text = "🔧 Вызвать ремонт (30 🪙)"
+
+[node name="HBoxCoins" type="HBoxContainer" parent="VBox/Header"]
+layout_mode = 2
+
+[node name="CoinsTitle" type="Label" parent="VBox/Header/HBoxCoins"]
+layout_mode = 2
+text = "Казна: "
+
+[node name="CoinsValue" type="Label" parent="VBox/Header/HBoxCoins"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.984314, 0.94902, 0.211765, 1)
+theme_override_font_sizes/font_size = 18
+text = "100 🪙"
+
+[node name="TabContainer" type="TabContainer" parent="VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+current_tab = 0
+
+[node name="Магазин" type="MarginContainer" parent="VBox/TabContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+metadata/_tab_index = 0
+
+[node name="ScrollSeeds" type="ScrollContainer" parent="VBox/TabContainer/Магазин"]
+layout_mode = 2
+
+[node name="VBoxSeeds" type="VBoxContainer" parent="VBox/TabContainer/Магазин/ScrollSeeds"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="Улучшения" type="MarginContainer" parent="VBox/TabContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+metadata/_tab_index = 1
+
+[node name="ScrollUpgrades" type="ScrollContainer" parent="VBox/TabContainer/Улучшения"]
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="VBox/TabContainer/Улучшения/ScrollUpgrades"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="ItemWindmill" type="HBoxContainer" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox/ItemWindmill"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "🏭 Ветряная мельница\n(Перемалывает зерно в муку: +50% выручки!)"
+
+[node name="BtnBuyWindmill" type="Button" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox/ItemWindmill"]
+custom_minimum_size = Vector2(170, 36)
+layout_mode = 2
+text = "Построить (600 🪙)"
+
+[node name="ItemBarn" type="HBoxContainer" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox/ItemBarn"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "🏚 Большой амбар\n(Сохраняет урожай от порчи: +20% к базовой цене)"
+
+[node name="BtnBuyBarn" type="Button" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox/ItemBarn"]
+custom_minimum_size = Vector2(170, 36)
+layout_mode = 2
+text = "Построить (450 🪙)"
+
+[node name="ItemCanopy" type="HBoxContainer" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox/ItemCanopy"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "☂ Навес от непогоды\n(Укрытие рабочих и техники от дождя и града)"
+
+[node name="BtnBuyCanopy" type="Button" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox/ItemCanopy"]
+custom_minimum_size = Vector2(170, 36)
+layout_mode = 2
+text = "Построить (250 🪙)"
+
+[node name="ItemScarecrow" type="HBoxContainer" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox/ItemScarecrow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "🧙 Пугало огородное (до 3 на монитор)\n(Отпугивает птиц в радиусе поля)"
+
+[node name="BtnBuyScarecrow" type="Button" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox/ItemScarecrow"]
+custom_minimum_size = Vector2(170, 36)
+layout_mode = 2
+text = "Купить (150 🪙)"
+
+[node name="ItemSeeder" type="HBoxContainer" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox/ItemSeeder"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "🚜 Тракторная сеялка\n(Автоматизирует сев, исключает забастовки)"
+
+[node name="BtnBuySeeder" type="Button" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox/ItemSeeder"]
+custom_minimum_size = Vector2(170, 36)
+layout_mode = 2
+text = "Купить (350 🪙)"
+
+[node name="ItemDog" type="HBoxContainer" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox/ItemDog"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "🐕 Сторожевой пес Барбос\n(Мгновенно прогоняет птиц с лаем)"
+
+[node name="BtnBuyDog" type="Button" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox/ItemDog"]
+custom_minimum_size = Vector2(170, 36)
+layout_mode = 2
+text = "Купить (500 🪙)"
+
+[node name="ItemSpeed" type="HBoxContainer" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox/ItemSpeed"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "⚡ Форсирование двигателей\n(Скорость всей техники фермы)"
+
+[node name="LblSpeedVal" type="Label" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox/ItemSpeed"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "x1.00"
+
+[node name="BtnBuySpeed" type="Button" parent="VBox/TabContainer/Улучшения/ScrollUpgrades/VBox/ItemSpeed"]
+custom_minimum_size = Vector2(170, 36)
+layout_mode = 2
+text = "Улучшить"
+
+[node name="Декор и Гараж" type="MarginContainer" parent="VBox/TabContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+metadata/_tab_index = 2
+
+[node name="VBoxGarage" type="VBoxContainer" parent="VBox/TabContainer/Декор и Гараж"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="HBoxColor" type="HBoxContainer" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage"]
+layout_mode = 2
+
+[node name="Lbl" type="Label" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage/HBoxColor"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Цвет кузова трактора:"
+
+[node name="ColorPicker" type="ColorPickerButton" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage/HBoxColor"]
+custom_minimum_size = Vector2(150, 36)
+layout_mode = 2
+color = Color(0.67451, 0.196078, 0.196078, 1)
+
+[node name="HSeparator" type="HSeparator" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage"]
+layout_mode = 2
+
+[node name="DescDecor" type="Label" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Оформление заднего фона фермы:"
+
+[node name="HBoxDecorSelect" type="HBoxContainer" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage"]
+layout_mode = 2
+
+[node name="Lbl" type="Label" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage/HBoxDecorSelect"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Текущий декор:"
+
+[node name="OptDecor" type="OptionButton" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage/HBoxDecorSelect"]
+custom_minimum_size = Vector2(240, 36)
+layout_mode = 2
+
+[node name="HBoxDecorBuy" type="HBoxContainer" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage"]
+layout_mode = 2
+
+[node name="LblDecorPrice" type="Label" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage/HBoxDecorBuy"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Стоимость открытия: 200 🪙"
+
+[node name="BtnBuyDecor" type="Button" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage/HBoxDecorBuy"]
+custom_minimum_size = Vector2(150, 36)
+layout_mode = 2
+text = "Применить"
+
+[node name="Настройки" type="MarginContainer" parent="VBox/TabContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+metadata/_tab_index = 3
+
+[node name="VBoxSettings" type="VBoxContainer" parent="VBox/TabContainer/Настройки"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="HBoxMonitors" type="HBoxContainer" parent="VBox/TabContainer/Настройки/VBoxSettings"]
+layout_mode = 2
+
+[node name="Lbl" type="Label" parent="VBox/TabContainer/Настройки/VBoxSettings/HBoxMonitors"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Рабочий монитор:"
+
+[node name="OptMonitors" type="OptionButton" parent="VBox/TabContainer/Настройки/VBoxSettings/HBoxMonitors"]
+custom_minimum_size = Vector2(250, 34)
+layout_mode = 2
+
+[node name="HBoxGraphics" type="HBoxContainer" parent="VBox/TabContainer/Настройки/VBoxSettings"]
+layout_mode = 2
+
+[node name="Lbl" type="Label" parent="VBox/TabContainer/Настройки/VBoxSettings/HBoxGraphics"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Режим рендера:"
+
+[node name="Check32bit" type="CheckBox" parent="VBox/TabContainer/Настройки/VBoxSettings/HBoxGraphics"]
+layout_mode = 2
+button_pressed = true
+text = "32-bit Native"
+
+[node name="Check16bit" type="CheckBox" parent="VBox/TabContainer/Настройки/VBoxSettings/HBoxGraphics"]
+layout_mode = 2
+text = "16-bit Dithered"
+
+[node name="HBoxFps" type="HBoxContainer" parent="VBox/TabContainer/Настройки/VBoxSettings"]
+layout_mode = 2
+
+[node name="Lbl" type="Label" parent="VBox/TabContainer/Настройки/VBoxSettings/HBoxFps"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Ограничение частоты кадров:"
+
+[node name="OptFps" type="OptionButton" parent="VBox/TabContainer/Настройки/VBoxSettings/HBoxFps"]
+custom_minimum_size = Vector2(250, 34)
+layout_mode = 2
+
+[node name="Статистика" type="MarginContainer" parent="VBox/TabContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+metadata/_tab_index = 4
+
+[node name="VBoxStats" type="VBoxContainer" parent="VBox/TabContainer/Статистика"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Grid" type="GridContainer" parent="VBox/TabContainer/Статистика/VBoxStats"]
+layout_mode = 2
+theme_override_constants/h_separation = 20
+theme_override_constants/v_separation = 10
+columns = 2
+
+[node name="StatCoinsLbl" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/Grid"]
+layout_mode = 2
+text = "Всего заработано:"
+
+[node name="StatCoinsVal" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/Grid"]
+layout_mode = 2
+text = "0 🪙"
+
+[node name="StatHarvestsLbl" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/Grid"]
+layout_mode = 2
+text = "Собрано урожаев:"
+
+[node name="StatHarvestsVal" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/Grid"]
+layout_mode = 2
+text = "0"
+
+[node name="StatStrikesLbl" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/Grid"]
+layout_mode = 2
+text = "Урегулировано забастовок:"
+
+[node name="StatStrikesVal" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/Grid"]
+layout_mode = 2
+text = "0"
+
+[node name="StatRepairsLbl" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/Grid"]
+layout_mode = 2
+text = "Выполнено ремонтов техники:"
+
+[node name="StatRepairsVal" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/Grid"]
+layout_mode = 2
+text = "0"
+
+[node name="HSeparator" type="HSeparator" parent="VBox/TabContainer/Статистика/VBoxStats"]
+layout_mode = 2
+
+[node name="HBoxRepairAction" type="HBoxContainer" parent="VBox/TabContainer/Статистика/VBoxStats"]
+layout_mode = 2
+
+[node name="RepairStatusLbl" type="Label" parent="VBox/TabContainer/Статистика/VBoxStats/HBoxRepairAction"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Статус техники: В порядке ✔"
+
+[node name="BtnStatCallRepair" type="Button" parent="VBox/TabContainer/Статистика/VBoxStats/HBoxRepairAction"]
+custom_minimum_size = Vector2(230, 38)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.984314, 0.94902, 0.211765, 1)
+text = "🔧 Вызвать ремонт (30 🪙)"

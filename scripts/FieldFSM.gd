@@ -1,0 +1,754 @@
+class_name FieldFSM
+extends Node2D
+
+const GameManager = preload("res://scripts/GameManager.gd")
+const SettingsManager = preload("res://scripts/SettingsManager.gd")
+const AssetGenerator = preload("res://tools/AssetGenerator.gd")
+const WindowManager = preload("res://scripts/WindowManager.gd")
+
+enum State {
+	IDLE,
+	PLOWING,    # 1. Трактор пашет сухую землю в борозды
+	SOWING,     # 2. Сеятели/сеялка разбрасывают семена
+	WATERING,   # 3. Цистерна поливает землю
+	GROWING,    # 4. Рост культур, покачивание колосьев
+	HARVESTING, # 5. Комбайн срезает урожай, оставляя стерню
+	HAULING     # 6. Грузовик забирает зерно и начисляет монеты
+}
+
+# Сигналы машины состояний
+signal state_changed(new_state: State)
+signal harvest_completed(coins_earned: int)
+signal event_strike_started
+signal event_breakdown_started(vehicle_pos: Vector2)
+signal event_crows_arrived
+
+# Текущее состояние
+var current_state: State = State.IDLE
+var state_timer: float = 0.0
+
+# Размеры поля и координатная сетка
+var screen_width: int = 1920
+const GROUND_Y: float = 84.0      # Поверхность земли для колес и ног
+const TILE_SIZE: int = 32         # 16 px * 2x масштаб
+var segment_count: int = 60
+var soil_segments: Array[int] = [] # Состояния тайлов: 0=сухая, 1=борозды, 2=влажная, 3=стерня
+var crop_stages: Array[int] = []   # Стадии растений: -1=нет, 0..3
+
+# Текстуры
+var tex_soil: Texture2D
+var tex_crops: Texture2D
+var tex_tractor: Texture2D
+var tex_tractor_seeder: Texture2D
+var tex_worker: Texture2D
+var tex_tanker: Texture2D
+var tex_harvester: Texture2D
+var tex_truck: Texture2D
+var tex_crisis: Texture2D
+var tex_pickup: Texture2D
+var tex_smoke_fire: Texture2D
+var tex_campfire: Texture2D
+var tex_canopy: Texture2D
+var tex_mud_splash: Texture2D
+var tex_workers_rest: Texture2D
+var tex_windmill: Texture2D
+var tex_barn: Texture2D
+var tex_decorations: Texture2D
+var tex_weather_parts: Texture2D
+
+# Объекты сцены
+var vehicle_sprite: Sprite2D
+var seeder_workers: Array[Sprite2D] = []
+var smoke_fire_sprite: Sprite2D
+var mud_splash_sprite: Sprite2D
+var campfire_sprite: Sprite2D
+var resting_workers: Array[Sprite2D] = []
+var active_crows: Array[Sprite2D] = []
+
+# Частицы
+var particles_soil: CPUParticles2D
+var particles_water: CPUParticles2D
+var particles_seed: CPUParticles2D
+var particles_weather: CPUParticles2D
+var floating_label: Label
+
+# Позиции техники и анимации
+var vehicle_x: float = -100.0
+var vehicle_speed: float = 120.0
+var truck_fill_stage: int = 0
+var anim_timer: float = 0.0
+
+# Флаги кризисных событий
+var is_strike_active: bool = false
+var is_breakdown_active: bool = false
+var is_stuck_in_mud: bool = false
+var is_night_active: bool = false
+
+# Погода (управляется EventManager)
+var current_weather_id: int = 0 # 0=clear, 1=rain, 2=hail, 3=snow, 4=wind, 5=night
+var weather_speed_mod: float = 1.0
+
+func _ready() -> void:
+	_load_textures()
+	_update_screen_bounds()
+	_create_particles()
+	_create_visual_nodes()
+	
+	# Запуск первого цикла
+	change_state(State.PLOWING)
+
+func _update_screen_bounds() -> void:
+	var screen_idx: int = SettingsManager.get_screen_index()
+	if screen_idx == WindowManager.SCREEN_ALL_MONITORS:
+		var total_w: int = 0
+		var screen_cnt: int = DisplayServer.get_screen_count()
+		for i in range(screen_cnt):
+			total_w += DisplayServer.screen_get_usable_rect(i).size.x
+		screen_width = max(total_w, 1920)
+	else:
+		var screen_cnt: int = DisplayServer.get_screen_count()
+		if screen_idx < 0 or screen_idx >= screen_cnt:
+			screen_idx = DisplayServer.get_primary_screen()
+		var rect: Rect2i = DisplayServer.screen_get_usable_rect(screen_idx)
+		screen_width = max(rect.size.x, 800)
+
+	segment_count = int(ceil(float(screen_width) / float(TILE_SIZE))) + 1
+	soil_segments.resize(segment_count)
+	soil_segments.fill(0)
+	crop_stages.resize(segment_count)
+	crop_stages.fill(-1)
+
+func _load_textures() -> void:
+	tex_soil = AssetGenerator.get_texture("soil_tiles.png")
+	tex_crops = AssetGenerator.get_texture("crops_sheet.png")
+	tex_tractor = AssetGenerator.get_texture("tractor.png")
+	tex_tractor_seeder = AssetGenerator.get_texture("tractor_seeder.png")
+	tex_worker = AssetGenerator.get_texture("worker_sower.png")
+	tex_tanker = AssetGenerator.get_texture("water_tanker.png")
+	tex_harvester = AssetGenerator.get_texture("harvester.png")
+	tex_truck = AssetGenerator.get_texture("truck_sheet.png")
+	tex_crisis = AssetGenerator.get_texture("crisis_objects.png")
+	tex_pickup = AssetGenerator.get_texture("pickup_repair.png")
+	tex_smoke_fire = AssetGenerator.get_texture("smoke_fire_sheet.png")
+	tex_campfire = AssetGenerator.get_texture("campfire.png")
+	tex_canopy = AssetGenerator.get_texture("canopy.png")
+	tex_mud_splash = AssetGenerator.get_texture("mud_splash.png")
+	tex_workers_rest = AssetGenerator.get_texture("workers_rest.png")
+	tex_windmill = AssetGenerator.get_texture("windmill.png")
+	tex_barn = AssetGenerator.get_texture("barn.png")
+	tex_decorations = AssetGenerator.get_texture("decorations.png")
+	tex_weather_parts = AssetGenerator.get_texture("weather_particles.png")
+
+func _create_particles() -> void:
+	# Частицы земли / пыли
+	particles_soil = CPUParticles2D.new()
+	particles_soil.emitting = false
+	particles_soil.amount = 16
+	particles_soil.lifetime = 0.5
+	particles_soil.color = Color("8f563b")
+	particles_soil.direction = Vector2(-1, -0.5)
+	particles_soil.spread = 35.0
+	particles_soil.gravity = Vector2(0, 180)
+	particles_soil.initial_velocity_min = 30.0
+	particles_soil.initial_velocity_max = 70.0
+	add_child(particles_soil)
+
+	# Частицы полива
+	particles_water = CPUParticles2D.new()
+	particles_water.emitting = false
+	particles_water.amount = 32
+	particles_water.lifetime = 0.4
+	particles_water.color = Color("5fcde4")
+	particles_water.direction = Vector2(-1, 0.8)
+	particles_water.spread = 40.0
+	particles_water.gravity = Vector2(0, 150)
+	particles_water.initial_velocity_min = 40.0
+	particles_water.initial_velocity_max = 90.0
+	add_child(particles_water)
+
+	# Частицы семян
+	particles_seed = CPUParticles2D.new()
+	particles_seed.emitting = false
+	particles_seed.amount = 12
+	particles_seed.lifetime = 0.4
+	particles_seed.color = Color("fbf236")
+	particles_seed.direction = Vector2(0.5, 1.0)
+	particles_seed.spread = 30.0
+	particles_seed.gravity = Vector2(0, 160)
+	particles_seed.initial_velocity_min = 20.0
+	particles_seed.initial_velocity_max = 50.0
+	add_child(particles_seed)
+
+	# Погодные частицы (снег, град, дождь, ветер)
+	particles_weather = CPUParticles2D.new()
+	particles_weather.emitting = false
+	particles_weather.amount = 64
+	particles_weather.lifetime = 1.2
+	particles_weather.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	particles_weather.emission_rect_extents = Vector2(1920, 10)
+	particles_weather.position = Vector2(960, 0)
+	add_child(particles_weather)
+
+func _create_visual_nodes() -> void:
+	# Основной спрайт техники
+	vehicle_sprite = Sprite2D.new()
+	vehicle_sprite.scale = Vector2(2.0, 2.0)
+	vehicle_sprite.centered = false
+	add_child(vehicle_sprite)
+
+	# Спрайт брызг грязи при буксовании
+	mud_splash_sprite = Sprite2D.new()
+	mud_splash_sprite.texture = tex_mud_splash
+	mud_splash_sprite.hframes = 4
+	mud_splash_sprite.scale = Vector2(2.0, 2.0)
+	mud_splash_sprite.centered = false
+	mud_splash_sprite.visible = false
+	add_child(mud_splash_sprite)
+
+	# Спрайт дыма и огня поломки (4 кадра 16x32)
+	smoke_fire_sprite = Sprite2D.new()
+	smoke_fire_sprite.texture = tex_smoke_fire
+	smoke_fire_sprite.hframes = 4
+	smoke_fire_sprite.scale = Vector2(2.0, 2.0)
+	smoke_fire_sprite.centered = false
+	smoke_fire_sprite.visible = false
+	add_child(smoke_fire_sprite)
+
+	# Спрайт костра для ночи
+	campfire_sprite = Sprite2D.new()
+	campfire_sprite.texture = tex_campfire
+	campfire_sprite.hframes = 4
+	campfire_sprite.scale = Vector2(2.0, 2.0)
+	campfire_sprite.centered = false
+	campfire_sprite.visible = false
+	add_child(campfire_sprite)
+
+	# 3 рабочих-сеятеля
+	for i in range(3):
+		var w: Sprite2D = Sprite2D.new()
+		w.texture = tex_worker
+		w.hframes = 4
+		w.scale = Vector2(2.0, 2.0)
+		w.centered = false
+		w.visible = false
+		add_child(w)
+		seeder_workers.append(w)
+
+	# 3 рабочих на отдыхе (ночь / навес)
+	for i in range(3):
+		var rw: Sprite2D = Sprite2D.new()
+		rw.texture = tex_workers_rest
+		rw.hframes = 4
+		rw.scale = Vector2(2.0, 2.0)
+		rw.centered = false
+		rw.visible = false
+		add_child(rw)
+		resting_workers.append(rw)
+
+	# Стая ворон (5 птиц)
+	for i in range(5):
+		var crow: Sprite2D = Sprite2D.new()
+		crow.texture = tex_crisis
+		crow.region_enabled = true
+		crow.region_rect = Rect2(48, 0, 16, 16) # сидящая ворона
+		crow.scale = Vector2(2.0, 2.0)
+		crow.centered = false
+		crow.visible = false
+		add_child(crow)
+		active_crows.append(crow)
+
+	# Всплывающий лейбл начисления денег
+	floating_label = Label.new()
+	floating_label.visible = false
+	floating_label.add_theme_color_override("font_color", Color("fbf236"))
+	floating_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	floating_label.add_theme_constant_override("shadow_offset_x", 1)
+	floating_label.add_theme_constant_override("shadow_offset_y", 1)
+	add_child(floating_label)
+
+func _process(delta: float) -> void:
+	anim_timer += delta
+	_update_crows_interaction(delta)
+	_update_fsm(delta)
+	queue_redraw()
+
+func _update_fsm(delta: float) -> void:
+	# 1. НОЧЬ: вся работа останавливается, сеятели и техника собираются у костра
+	if is_night_active:
+		_process_night_camp(delta)
+		return
+	else:
+		campfire_sprite.visible = false
+		for rw in resting_workers:
+			rw.visible = false
+
+	# 2. ПОЛОМКА ТЕХНИКИ: идет черный дым и пламя
+	if is_breakdown_active:
+		smoke_fire_sprite.visible = true
+		smoke_fire_sprite.position = Vector2(vehicle_x + 12.0, GROUND_Y - 56.0)
+		smoke_fire_sprite.frame = int(anim_timer * 8.0) % 4
+		return
+	else:
+		smoke_fire_sprite.visible = false
+
+	# 3. БУКСОВАНИЕ В ГРЯЗИ ВО ВРЕМЯ ДОЖДЯ
+	if is_stuck_in_mud:
+		mud_splash_sprite.visible = true
+		mud_splash_sprite.position = Vector2(vehicle_x - 16.0, GROUND_Y - 26.0)
+		mud_splash_sprite.frame = int(anim_timer * 10.0) % 4
+		# Колеса техники крутятся на месте
+		return
+	else:
+		mud_splash_sprite.visible = false
+
+	# 4. ЗАБАСТОВКА СЕЯТЕЛЕЙ
+	if is_strike_active:
+		return
+
+	# Стандартное движение FSM
+	var effective_speed: float = vehicle_speed * GameManager.speed_multiplier * weather_speed_mod
+
+	match current_state:
+		State.PLOWING:
+			_process_plowing(delta, effective_speed)
+		State.SOWING:
+			_process_sowing(delta, effective_speed)
+		State.WATERING:
+			_process_watering(delta, effective_speed)
+		State.GROWING:
+			_process_growing(delta)
+		State.HARVESTING:
+			_process_harvesting(delta, effective_speed)
+		State.HAULING:
+			_process_hauling(delta, effective_speed)
+
+# ------------------------------------------------------------------------------
+# НОЧНОЙ ЛАГЕРЬ У КОСТРА
+# ------------------------------------------------------------------------------
+func _process_night_camp(_delta: float) -> void:
+	campfire_sprite.visible = true
+	var camp_x: float = clamp(vehicle_x + 40.0, 160.0, screen_width - 200.0)
+	campfire_sprite.position = Vector2(camp_x, GROUND_Y - 28.0)
+	campfire_sprite.frame = int(anim_timer * 6.0) % 4
+
+	# Сеятели сидят у костра
+	for i in range(resting_workers.size()):
+		var rw: Sprite2D = resting_workers[i]
+		rw.visible = true
+		var offset_dir: float = -32.0 if i == 0 else (28.0 + (i - 1) * 24.0)
+		rw.position = Vector2(camp_x + offset_dir, GROUND_Y - 30.0)
+		rw.frame = i % 4
+
+	# Скрываем идущих рабочих
+	for w in seeder_workers:
+		w.visible = false
+
+# ------------------------------------------------------------------------------
+# ВЗАИМОДЕЙСТВИЕ С ВОРОНАМИ (ОНИ ПУГАЮТСЯ ТЕХНИКИ И УЛЕТАЮТ)
+# ------------------------------------------------------------------------------
+func spawn_crows_event() -> void:
+	for i in range(active_crows.size()):
+		var crow: Sprite2D = active_crows[i]
+		crow.visible = true
+		# Расставляем по полю
+		var cx: float = randf_range(150.0, screen_width - 150.0)
+		crow.position = Vector2(cx, GROUND_Y - 26.0)
+		crow.region_rect = Rect2(48, 0, 16, 16) # сидит
+
+func _update_crows_interaction(delta: float) -> void:
+	var danger_x: float = vehicle_x + 30.0
+	if current_state == State.SOWING and seeder_workers.size() > 0 and seeder_workers[0].visible:
+		danger_x = max(danger_x, seeder_workers[0].position.x)
+
+	for i in range(active_crows.size()):
+		var crow: Sprite2D = active_crows[i]
+		if not crow.visible:
+			continue
+
+		# Проверка пугал
+		if GameManager.scarecrow_count > 0:
+			for s in range(GameManager.scarecrow_count):
+				var scarecrow_x: float = (screen_width / float(GameManager.scarecrow_count + 1)) * (s + 1)
+				if abs(crow.position.x - scarecrow_x) < 140.0:
+					_scare_crow_away(crow)
+
+		# Проверка приближения техники или сеятелей
+		var dist_to_danger: float = abs(crow.position.x - danger_x)
+		if dist_to_danger < 90.0:
+			_scare_crow_away(crow)
+
+		# Анимация клевания на земле
+		if crow.position.y >= GROUND_Y - 30.0:
+			var frame_idx: int = 2 if (int(anim_timer * 4.0 + i) % 2 == 0) else 3
+			crow.region_rect = Rect2(frame_idx * 16, 0, 16, 16)
+
+func _scare_crow_away(crow: Sprite2D) -> void:
+	if crow.get_meta("flying", false):
+		return
+	crow.set_meta("flying", true)
+	crow.region_rect = Rect2(16, 0, 16, 16) # полет
+	var tw: Tween = create_tween()
+	var flight_x: float = crow.position.x + randf_range(120.0, 260.0)
+	tw.tween_property(crow, "position", Vector2(flight_x, -50.0), 1.2)
+	tw.tween_callback(func():
+		crow.visible = false
+		crow.set_meta("flying", false)
+	)
+
+# ------------------------------------------------------------------------------
+# 1. PLOWING: Трактор вспахивает землю
+# ------------------------------------------------------------------------------
+func _start_plowing() -> void:
+	vehicle_sprite.visible = true
+	vehicle_sprite.texture = tex_tractor
+	vehicle_sprite.hframes = 1
+	vehicle_sprite.frame = 0
+	vehicle_sprite.modulate = GameManager.tractor_color
+	vehicle_x = -70.0
+	vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
+	particles_soil.emitting = true
+
+func _process_plowing(delta: float, speed: float) -> void:
+	vehicle_x += speed * delta
+	vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
+	particles_soil.position = Vector2(vehicle_x + 10, GROUND_Y - 4.0)
+
+	var plow_x: float = vehicle_x + 8.0
+	var seg_idx: int = int(plow_x / float(TILE_SIZE))
+	for i in range(max(0, seg_idx - 1), min(segment_count, seg_idx + 2)):
+		if soil_segments[i] == 0:
+			soil_segments[i] = 1
+
+	if vehicle_x > screen_width + 40:
+		particles_soil.emitting = false
+		change_state(State.SOWING)
+
+# ------------------------------------------------------------------------------
+# 2. SOWING: Сев семян
+# ------------------------------------------------------------------------------
+func _start_sowing() -> void:
+	if GameManager.has_seeder_tractor:
+		vehicle_sprite.visible = true
+		vehicle_sprite.texture = tex_tractor_seeder
+		vehicle_sprite.hframes = 1
+		vehicle_sprite.modulate = GameManager.tractor_color
+		vehicle_x = -70.0
+		vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
+		particles_seed.emitting = true
+	else:
+		vehicle_sprite.visible = false
+		for i in range(seeder_workers.size()):
+			var w: Sprite2D = seeder_workers[i]
+			w.visible = true
+			w.position = Vector2(-40.0 - i * 36.0, GROUND_Y - 32.0)
+		particles_seed.emitting = true
+
+func _process_sowing(delta: float, speed: float) -> void:
+	if GameManager.has_seeder_tractor:
+		vehicle_x += speed * 1.2 * delta
+		vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
+		particles_seed.position = Vector2(vehicle_x + 16, GROUND_Y - 10.0)
+
+		var seeder_x: float = vehicle_x + 20.0
+		var seg: int = int(seeder_x / float(TILE_SIZE))
+		if seg >= 0 and seg < segment_count:
+			crop_stages[seg] = 0
+
+		if vehicle_x > screen_width + 50:
+			particles_seed.emitting = false
+			change_state(State.WATERING)
+	else:
+		var all_finished: bool = true
+		var lead_x: float = 0.0
+		for i in range(seeder_workers.size()):
+			var w: Sprite2D = seeder_workers[i]
+			w.position.x += speed * 0.7 * delta
+			w.frame = int(anim_timer * 5.0 + i) % 4
+			lead_x = max(lead_x, w.position.x)
+
+			var seg: int = int((w.position.x + 24.0) / float(TILE_SIZE))
+			if seg >= 0 and seg < segment_count:
+				crop_stages[seg] = 0
+
+			if w.position.x < screen_width + 40:
+				all_finished = false
+
+		particles_seed.position = Vector2(lead_x + 10, GROUND_Y - 10.0)
+
+		if all_finished:
+			for w in seeder_workers:
+				w.visible = false
+			particles_seed.emitting = false
+			change_state(State.WATERING)
+
+# ------------------------------------------------------------------------------
+# 3. WATERING: Полив
+# ------------------------------------------------------------------------------
+func _start_watering() -> void:
+	for w in seeder_workers:
+		w.visible = false
+
+	if current_weather_id == 1: # Дождь
+		for i in range(segment_count):
+			soil_segments[i] = 2
+		change_state(State.GROWING)
+		return
+
+	vehicle_sprite.visible = true
+	vehicle_sprite.texture = tex_tanker
+	vehicle_sprite.hframes = 1
+	vehicle_sprite.modulate = Color.WHITE
+	vehicle_x = -70.0
+	vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
+	particles_water.emitting = true
+
+func _process_watering(delta: float, speed: float) -> void:
+	vehicle_x += speed * delta
+	vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
+	particles_water.position = Vector2(vehicle_x + 4.0, GROUND_Y - 12.0)
+
+	var pipe_x: float = vehicle_x + 8.0
+	var seg: int = int(pipe_x / float(TILE_SIZE))
+	for i in range(max(0, seg - 1), min(segment_count, seg + 2)):
+		soil_segments[i] = 2
+
+	if vehicle_x > screen_width + 50:
+		particles_water.emitting = false
+		change_state(State.GROWING)
+
+# ------------------------------------------------------------------------------
+# 4. GROWING: Рост культур
+# ------------------------------------------------------------------------------
+func _start_growing() -> void:
+	vehicle_sprite.visible = false
+	particles_water.emitting = false
+	state_timer = 0.0
+
+func _process_growing(delta: float) -> void:
+	state_timer += delta * weather_speed_mod
+	var crop_data: Dictionary = GameManager.get_current_crop_data()
+	var total_time: float = float(crop_data.get("growth_time", 8.0))
+
+	var progress: float = clamp(state_timer / total_time, 0.0, 1.0)
+	var stage: int = int(progress * 3.99)
+	for i in range(segment_count):
+		crop_stages[i] = stage
+
+	if progress >= 1.0:
+		change_state(State.HARVESTING)
+
+# ------------------------------------------------------------------------------
+# 5. HARVESTING: Жатва
+# ------------------------------------------------------------------------------
+func _start_harvesting() -> void:
+	vehicle_sprite.visible = true
+	vehicle_sprite.texture = tex_harvester
+	vehicle_sprite.hframes = 3
+	vehicle_sprite.modulate = Color.WHITE
+	vehicle_x = -80.0
+	vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 40.0)
+
+func _process_harvesting(delta: float, speed: float) -> void:
+	vehicle_x += speed * 0.9 * delta
+	vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 40.0)
+	vehicle_sprite.frame = int(anim_timer * 9.0) % 3
+
+	var cutter_x: float = vehicle_x + 48.0
+	var seg: int = int(cutter_x / float(TILE_SIZE))
+	for i in range(max(0, seg - 1), min(segment_count, seg + 2)):
+		if crop_stages[i] != -1:
+			crop_stages[i] = -1
+			soil_segments[i] = 3
+
+	if vehicle_x > screen_width + 60:
+		change_state(State.HAULING)
+
+# ------------------------------------------------------------------------------
+# 6. HAULING: Вывоз и продажа (с учетом Мельницы и Амбара)
+# ------------------------------------------------------------------------------
+func _start_hauling() -> void:
+	vehicle_sprite.visible = true
+	vehicle_sprite.texture = tex_truck
+	vehicle_sprite.hframes = 4
+	vehicle_sprite.frame = 0
+	vehicle_sprite.modulate = Color.WHITE
+	vehicle_x = -70.0
+	vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
+	truck_fill_stage = 0
+
+func _process_hauling(delta: float, speed: float) -> void:
+	vehicle_x += speed * 1.1 * delta
+	vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
+
+	var frac: float = clamp(vehicle_x / float(screen_width), 0.0, 1.0)
+	truck_fill_stage = int(frac * 3.0)
+	vehicle_sprite.frame = truck_fill_stage
+
+	if vehicle_x > screen_width + 50:
+		_finish_hauling_cycle()
+
+func _finish_hauling_cycle() -> void:
+	var crop_data: Dictionary = GameManager.get_current_crop_data()
+	var base_reward: int = int(crop_data.get("base_reward", 35))
+	
+	# Бонус амбара (+20%)
+	if GameManager.has_barn:
+		base_reward = int(base_reward * 1.20)
+
+	# Бонус мельницы (+50% за помол муки)
+	var final_reward: int = base_reward
+	var bonus_text: String = ""
+	if GameManager.has_windmill:
+		var flour_bonus: int = int(base_reward * 0.50)
+		final_reward += flour_bonus
+		bonus_text = " (Мука +%d)" % flour_bonus
+
+	GameManager.add_coins(final_reward)
+	GameManager.total_harvested += 1
+
+	_show_floating_coins(final_reward, bonus_text)
+
+	soil_segments.fill(0)
+	crop_stages.fill(-1)
+
+	harvest_completed.emit(final_reward)
+	change_state(State.PLOWING)
+
+func _show_floating_coins(amount: int, extra_text: String = "") -> void:
+	floating_label.text = "+%d 🪙%s" % [amount, extra_text]
+	floating_label.position = Vector2(screen_width - 220, GROUND_Y - 50)
+	floating_label.visible = true
+	var tw: Tween = create_tween()
+	tw.tween_property(floating_label, "position:y", GROUND_Y - 80, 1.6)
+	tw.parallel().tween_property(floating_label, "modulate:a", 0.0, 1.6)
+	tw.tween_callback(func():
+		floating_label.visible = false
+		floating_label.modulate.a = 1.0
+	)
+
+func change_state(new_state: State) -> void:
+	current_state = new_state
+	state_timer = 0.0
+	state_changed.emit(new_state)
+
+	match new_state:
+		State.PLOWING:
+			_start_plowing()
+		State.SOWING:
+			_start_sowing()
+		State.WATERING:
+			_start_watering()
+		State.GROWING:
+			_start_growing()
+		State.HARVESTING:
+			_start_harvesting()
+		State.HAULING:
+			_start_hauling()
+
+# ==============================================================================
+# ОТРИСОВКА ПОЛЯ, УЛУЧШЕНИЙ, ДЕКОРАЦИЙ И АНИМАЦИЙ
+# ==============================================================================
+func _draw() -> void:
+	if tex_soil == null or tex_crops == null:
+		return
+
+	# 1. Задний план: Декорации (забор, цветы, фонари, деревья)
+	_draw_decorations()
+
+	# 2. Постройки: Мельница, Амбар, Навесы
+	_draw_buildings()
+
+	# 3. Полоса земли
+	for i in range(segment_count):
+		var sx: float = i * TILE_SIZE
+		var state_val: int = soil_segments[i]
+		var src_rect: Rect2 = Rect2(state_val * 16, 0, 16, 16)
+		var dst_rect: Rect2 = Rect2(sx, GROUND_Y, TILE_SIZE, TILE_SIZE)
+		draw_texture_rect_region(tex_soil, dst_rect, src_rect)
+
+	# 4. Растения
+	var crop_data: Dictionary = GameManager.get_current_crop_data()
+	var row_idx: int = int(crop_data.get("row_index", 0))
+
+	for i in range(segment_count):
+		var stage: int = crop_stages[i]
+		if stage >= 0 and stage <= 3:
+			var px: float = i * TILE_SIZE
+			var sway: float = 0.0
+			# Покачивание от ветра
+			var wind_factor: float = 3.5 if current_weather_id == 4 else 1.0
+			if stage >= 2 or current_weather_id == 4:
+				sway = sin(anim_timer * (3.5 * wind_factor) + i * 0.4) * (2.0 * wind_factor)
+
+			var src_crop: Rect2 = Rect2(stage * 16, row_idx * 16, 16, 16)
+			var dst_crop: Rect2 = Rect2(px + sway, GROUND_Y - TILE_SIZE + 4.0, TILE_SIZE, TILE_SIZE)
+			draw_texture_rect_region(tex_crops, dst_crop, src_crop)
+
+	# 5. Пугала (до 3 шт на монитор, расставляются равномерно)
+	if GameManager.scarecrow_count > 0 and tex_crisis != null:
+		var count: int = GameManager.scarecrow_count
+		for s in range(count):
+			var scare_x: float = (screen_width / float(count + 1)) * (s + 1)
+			var scare_rect: Rect2 = Rect2(80, 0, 16, 16)
+			draw_texture_rect_region(tex_crisis, Rect2(scare_x, GROUND_Y - 32.0, 32, 32), scare_rect)
+
+	# 6. Сторожевой пес
+	if GameManager.has_guard_dog and tex_crisis != null:
+		var dog_frame: int = int(anim_timer * 4.0) % 2
+		var dog_rect: Rect2 = Rect2(96 + dog_frame * 16, 0, 16, 16)
+		draw_texture_rect_region(tex_crisis, Rect2(screen_width - 160.0, GROUND_Y - 30.0, 32, 32), dog_rect)
+
+func _draw_buildings() -> void:
+	# Мельница (слева на X = 60)
+	if GameManager.has_windmill and tex_windmill != null:
+		# Башня мельницы (32x48 на масштаб 1.5x = 48x72)
+		var mill_base: Rect2 = Rect2(0, 0, 32, 48)
+		draw_texture_rect_region(tex_windmill, Rect2(40.0, GROUND_Y - 54.0, 36, 54), mill_base)
+		# Вращающиеся лопасти (2 кадра)
+		var blade_frame: int = int(anim_timer * 4.0) % 2
+		var blade_src: Rect2 = Rect2(32 + blade_frame * 32, 0, 32, 32)
+		draw_texture_rect_region(tex_windmill, Rect2(42.0, GROUND_Y - 66.0, 32, 32), blade_src)
+
+	# Амбар (справа на X = screen_width - 120)
+	if GameManager.has_barn and tex_barn != null:
+		var barn_src: Rect2 = Rect2(0, 0, 48, 36)
+		draw_texture_rect_region(tex_barn, Rect2(screen_width - 110.0, GROUND_Y - 42.0, 56, 42), barn_src)
+
+	# Навесы от дождя/града
+	if GameManager.canopy_count > 0 and tex_canopy != null:
+		for c in range(GameManager.canopy_count):
+			var canopy_x: float = 240.0 + c * 400.0
+			var canopy_src: Rect2 = Rect2(0, 0, 48, 32)
+			draw_texture_rect_region(tex_canopy, Rect2(canopy_x, GROUND_Y - 38.0, 56, 38), canopy_src)
+
+func _draw_decorations() -> void:
+	if GameManager.active_decoration == "none" or tex_decorations == null:
+		return
+
+	var dec_type: String = GameManager.active_decoration
+	var src_r: Rect2
+	var width_step: float = 32.0
+
+	match dec_type:
+		"fence_wood":
+			src_r = Rect2(0, 16, 16, 16)
+			width_step = 28.0
+		"fence_white":
+			src_r = Rect2(16, 16, 16, 16)
+			width_step = 28.0
+		"lamps":
+			var lamp_x: float = 48 if is_night_active else 32
+			src_r = Rect2(lamp_x, 0, 16, 32)
+			width_step = 160.0
+		"flowers":
+			src_r = Rect2(64, 16, 16, 16)
+			width_step = 64.0
+		"trees":
+			src_r = Rect2(80, 8, 24, 24)
+			width_step = 200.0
+
+	var x: float = 10.0
+	while x < screen_width - 20.0:
+		var dest_y: float = GROUND_Y - 26.0 if src_r.size.y == 16 else (GROUND_Y - 46.0)
+		draw_texture_rect_region(tex_decorations, Rect2(x, dest_y, src_r.size.x * 1.6, src_r.size.y * 1.6), src_r)
+		x += width_step
