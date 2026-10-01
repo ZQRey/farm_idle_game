@@ -5,7 +5,7 @@
 [node name="FarmHQ" type="Window"]
 title = "🌾 Штаб фермы - Управление и Магазин"
 initial_position = 2
-size = Vector2i(620, 520)
+size = Vector2i(660, 560)
 visible = false
 wrap_controls = true
 script = ExtResource("1_farmhq")
@@ -195,7 +195,69 @@ metadata/_tab_index = 2
 
 [node name="VBoxGarage" type="VBoxContainer" parent="VBox/TabContainer/Декор и Гараж"]
 layout_mode = 2
-theme_override_constants/separation = 16
+theme_override_constants/separation = 12
+
+[node name="DescMachinery" type="Label" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "🚜 Модернизация автопарка (Новая техника лучших моделей):"
+
+[node name="ItemHeavyTractor" type="PanelContainer" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage"]
+layout_mode = 2
+
+[node name="HBox" type="HBoxContainer" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage/ItemHeavyTractor"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Lbl" type="Label" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage/ItemHeavyTractor/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Трактор К-7М «Кировец» (420 л.с., спарка, 8-корпусный плуг)
+⚡ Скорость вспашки: +60% к базовой"
+
+[node name="BtnBuyHeavyTractor" type="Button" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage/ItemHeavyTractor/HBox"]
+custom_minimum_size = Vector2(170, 36)
+layout_mode = 2
+text = "Купить (800 🪙)"
+
+[node name="ItemSuperHarvester" type="PanelContainer" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage"]
+layout_mode = 2
+
+[node name="HBox" type="HBoxContainer" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage/ItemSuperHarvester"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Lbl" type="Label" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage/ItemSuperHarvester/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Комбайн CLAAS Lexion 8900 (роторное мотовило, 4 кадра)
+⚡ Скорость уборки: +60% | 💰 Урожайность: +15%"
+
+[node name="BtnBuySuperHarvester" type="Button" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage/ItemSuperHarvester/HBox"]
+custom_minimum_size = Vector2(170, 36)
+layout_mode = 2
+text = "Купить (1200 🪙)"
+
+[node name="ItemRoadTrain" type="PanelContainer" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage"]
+layout_mode = 2
+
+[node name="HBox" type="HBoxContainer" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage/ItemRoadTrain"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Lbl" type="Label" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage/ItemRoadTrain/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Автопоезд КАМАЗ 65207 (двухсекционный зерновоз с прицепом)
+⚡ Скорость логистики вывоза: +80%"
+
+[node name="BtnBuyRoadTrain" type="Button" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage/ItemRoadTrain/HBox"]
+custom_minimum_size = Vector2(170, 36)
+layout_mode = 2
+text = "Купить (950 🪙)"
+
+[node name="HSeparatorMachinery" type="HSeparator" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage"]
+layout_mode = 2
 
 [node name="HBoxColor" type="HBoxContainer" parent="VBox/TabContainer/Декор и Гараж/VBoxGarage"]
 layout_mode = 2

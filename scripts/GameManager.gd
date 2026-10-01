@@ -61,6 +61,11 @@ static var canopy_count: int = 0
 static var active_decoration: String = "none"
 static var unlocked_decorations: Array = ["none"]
 
+# Модернизация автопарка (новая техника лучших моделей)
+static var has_heavy_tractor: bool = false   # Кировец К-7М (+60% скорость вспашки, 800 🪙)
+static var has_super_harvester: bool = false # CLAAS Lexion (+60% уборка, +15% урожай, 1200 🪙)
+static var has_road_train: bool = false      # КАМАЗ Автопоезд (+80% вывоз зерна, 950 🪙)
+
 # Финансовая система (Субсидии, Кредиты, Долги)
 static var subsidy_debt: int = 0 # Долг по субсидии (льготная ставка 5%)
 static var loan_debt: int = 0    # Долг по банковскому кредиту (ставка 20%)
@@ -98,6 +103,10 @@ static func init_from_settings() -> void:
 	active_decoration = str(SettingsManager.config.get_value("game", "active_decoration", "none"))
 	unlocked_decorations = SettingsManager.config.get_value("game", "unlocked_decorations", ["none"])
 
+	has_heavy_tractor = bool(SettingsManager.config.get_value("game", "has_heavy_tractor", false))
+	has_super_harvester = bool(SettingsManager.config.get_value("game", "has_super_harvester", false))
+	has_road_train = bool(SettingsManager.config.get_value("game", "has_road_train", false))
+
 	subsidy_debt = int(SettingsManager.config.get_value("finances", "subsidy_debt", 0))
 	loan_debt = int(SettingsManager.config.get_value("finances", "loan_debt", 0))
 	total_bankruptcies = int(SettingsManager.config.get_value("finances", "total_bankruptcies", 0))
@@ -121,6 +130,10 @@ static func save_to_settings() -> void:
 	SettingsManager.config.set_value("game", "canopy_count", canopy_count)
 	SettingsManager.config.set_value("game", "active_decoration", active_decoration)
 	SettingsManager.config.set_value("game", "unlocked_decorations", unlocked_decorations)
+
+	SettingsManager.config.set_value("game", "has_heavy_tractor", has_heavy_tractor)
+	SettingsManager.config.set_value("game", "has_super_harvester", has_super_harvester)
+	SettingsManager.config.set_value("game", "has_road_train", has_road_train)
 
 	SettingsManager.config.set_value("finances", "subsidy_debt", subsidy_debt)
 	SettingsManager.config.set_value("finances", "loan_debt", loan_debt)
@@ -233,6 +246,9 @@ static func declare_bankruptcy() -> void:
 	has_windmill = false
 	has_barn = false
 	canopy_count = 0
+	has_heavy_tractor = false
+	has_super_harvester = false
+	has_road_train = false
 	active_decoration = "none"
 	unlocked_decorations = ["none"]
 

@@ -62,7 +62,7 @@ static func generate_all_assets(force: bool = false) -> void:
 	if not DirAccess.dir_exists_absolute(OUTPUT_DIR):
 		DirAccess.make_dir_recursive_absolute(OUTPUT_DIR)
 
-	var check_file: String = OUTPUT_DIR + "/tractor.png"
+	var check_file: String = OUTPUT_DIR + "/tractor_v2.png"
 	if not force and FileAccess.file_exists(check_file):
 		print("[AssetGenerator] Generated assets already exist.")
 		return
@@ -89,6 +89,11 @@ static func generate_all_assets(force: bool = false) -> void:
 	_generate_barn().save_png(OUTPUT_DIR + "/barn.png")
 	_generate_decorations().save_png(OUTPUT_DIR + "/decorations.png")
 	_generate_weather_particles().save_png(OUTPUT_DIR + "/weather_particles.png")
+
+	# Новые улучшенные модели техники
+	_generate_tractor_v2().save_png(OUTPUT_DIR + "/tractor_v2.png")
+	_generate_harvester_v2().save_png(OUTPUT_DIR + "/harvester_v2.png")
+	_generate_truck_v2().save_png(OUTPUT_DIR + "/truck_v2.png")
 
 	print("[AssetGenerator] All assets successfully generated into: ", OUTPUT_DIR)
 
@@ -1047,3 +1052,216 @@ static func _generate_weather_particles() -> Image:
 	_safe_pixel(img, 25, 6, DB32.cyan)
 
 	return img
+
+
+# ==============================================================================
+# 22. ТЯЖЕЛЫЙ ТРАКТОР К-7М «КИРОВЕЦ» (96x20, 2 кадра по 48x20)
+# ==============================================================================
+static func _generate_tractor_v2() -> Image:
+	var img: Image = Image.create(96, 20, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+
+	for frame in range(2):
+		var ox: int = frame * 48
+
+		# 1. Рама и противовес спереди
+		_rect(img, ox + 6, 14, 38, 2, DB32.charcoal)
+		_rect(img, ox + 39, 10, 4, 5, DB32.dark_grey) # передний балласт
+
+		# 2. Массивный капот двигателя К-7М (терракотово-оранжевый)
+		_rect(img, ox + 22, 6, 17, 8, DB32.warm_brown)
+		_rect(img, ox + 24, 5, 14, 1, DB32.orange)
+		_rect(img, ox + 37, 7, 2, 6, DB32.charcoal)   # решетка радиатора
+		_rect(img, ox + 37, 9, 2, 2, DB32.yellow)     # спаренная LED фара
+		_rect(img, ox + 26, 7, 9, 1, DB32.charcoal)   # воздухозаборник
+		_rect(img, ox + 26, 9, 9, 1, DB32.charcoal)
+
+		# 3. Выхлопная труба и анимация выхлопа
+		_rect(img, ox + 23, 2, 2, 5, DB32.slate)
+		_rect(img, ox + 22, 1, 3, 1, DB32.charcoal)
+		if frame == 0:
+			_safe_pixel(img, ox + 23, 0, DB32.light_grey)
+		else:
+			_rect(img, ox + 22, 0, 3, 1, DB32.light_grey)
+			_safe_pixel(img, ox + 21, 0, DB32.slate)
+
+		# 4. Просторная кабина
+		_rect(img, ox + 10, 3, 12, 11, DB32.pure_white)
+		_rect(img, ox + 11, 4, 10, 6, DB32.cyan)       # панорамные тонированные стекла
+		_rect(img, ox + 14, 4, 1, 6, DB32.charcoal)   # стойка окна
+		_rect(img, ox + 9, 2, 14, 2, DB32.pure_white)  # крыша
+		# Проблесковый оранжевый маячок на крыше
+		_rect(img, ox + 15, 0, 2, 2, DB32.orange if frame == 0 else DB32.yellow)
+
+		# 5. Огромный 8-корпусный плуг сзади (ox + 0 .. ox + 8)
+		_rect(img, ox + 6, 11, 4, 3, DB32.charcoal)   # гидронавеска
+		_rect(img, ox + 1, 13, 7, 2, DB32.slate)      # балка плуга
+		_rect(img, ox + 0, 14, 3, 4, DB32.charcoal)   # лемех 1
+		_rect(img, ox + 3, 15, 3, 4, DB32.charcoal)   # лемех 2
+		_safe_pixel(img, ox + 1, 17, DB32.pure_white if frame == 1 else DB32.slate) # блеск лезвия
+
+		# 6. Огромные спаренные колеса (радиус 5, диаметр 11)
+		# Заднее колесо
+		_circle(img, ox + 14, 14, 5, DB32.charcoal)
+		_circle(img, ox + 14, 14, 2, DB32.yellow)
+		# Переднее колесо
+		_circle(img, ox + 32, 14, 5, DB32.charcoal)
+		_circle(img, ox + 32, 14, 2, DB32.yellow)
+
+		# Протекторы шин (поворот колес в 2 кадрах)
+		if frame == 0:
+			_safe_pixel(img, ox + 14, 9, DB32.slate)
+			_safe_pixel(img, ox + 14, 19, DB32.slate)
+			_safe_pixel(img, ox + 9, 14, DB32.slate)
+			_safe_pixel(img, ox + 19, 14, DB32.slate)
+
+			_safe_pixel(img, ox + 32, 9, DB32.slate)
+			_safe_pixel(img, ox + 32, 19, DB32.slate)
+			_safe_pixel(img, ox + 27, 14, DB32.slate)
+			_safe_pixel(img, ox + 37, 14, DB32.slate)
+		else:
+			_safe_pixel(img, ox + 11, 11, DB32.slate)
+			_safe_pixel(img, ox + 17, 17, DB32.slate)
+			_safe_pixel(img, ox + 11, 17, DB32.slate)
+			_safe_pixel(img, ox + 17, 11, DB32.slate)
+
+			_safe_pixel(img, ox + 29, 11, DB32.slate)
+			_safe_pixel(img, ox + 35, 17, DB32.slate)
+			_safe_pixel(img, ox + 29, 17, DB32.slate)
+			_safe_pixel(img, ox + 35, 11, DB32.slate)
+
+	return img
+
+
+# ==============================================================================
+# 23. РОТОРНЫЙ КОМБАЙН «CLAAS LEXION 8900» (160x24, 4 кадра по 40x24)
+# ==============================================================================
+static func _generate_harvester_v2() -> Image:
+	var img: Image = Image.create(160, 24, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+
+	for frame in range(4):
+		var ox: int = frame * 40
+
+		# 1. Корпус CLAAS Lexion (фирменный белый + яркий салатово-зеленый)
+		_rect(img, ox + 6, 4, 25, 14, DB32.bright_green)
+		_rect(img, ox + 6, 2, 22, 4, DB32.pure_white)
+
+		# 2. Зерновой бункер сверху с золотым зерном
+		_rect(img, ox + 10, 3, 14, 4, DB32.gold)
+		_rect(img, ox + 12, 2, 10, 2, DB32.yellow)
+
+		# 3. Длинный поворотный выгрузной шнек сзади
+		_rect(img, ox + 1, 2, 9, 2, DB32.pure_white)
+		_rect(img, ox + 0, 1, 2, 4, DB32.charcoal)
+
+		# 4. Панорамная кабина Lexion спереди
+		_rect(img, ox + 23, 4, 9, 8, DB32.cyan)
+		_rect(img, ox + 22, 2, 11, 2, DB32.pure_white) # крыша кабины со спойлером
+		_rect(img, ox + 30, 4, 2, 8, DB32.charcoal)   # передняя стойка
+		_rect(img, ox + 29, 10, 3, 2, DB32.yellow)    # светодиодные фары
+		# Маячок на крыше (мигает 4 кадра)
+		_safe_pixel(img, ox + 27, 1, DB32.yellow if (frame % 2 == 0) else DB32.orange)
+
+		# 5. Наклонная камера к жатке
+		_rect(img, ox + 28, 12, 7, 5, DB32.charcoal)
+
+		# 6. Роторное мотовило жатки с 4-кадровым вращением (ox + 35, y: 16)
+		var rx: int = ox + 35
+		var ry: int = 16
+		_circle(img, rx, ry, 4, DB32.bright_green)
+		_safe_pixel(img, rx, ry, DB32.charcoal)
+		match frame:
+			0:
+				_rect(img, rx - 4, ry, 9, 1, DB32.pure_white)
+				_rect(img, rx, ry - 4, 1, 9, DB32.pure_white)
+			1:
+				_safe_pixel(img, rx - 3, ry - 3, DB32.yellow)
+				_safe_pixel(img, rx + 3, ry + 3, DB32.yellow)
+				_safe_pixel(img, rx - 3, ry + 3, DB32.yellow)
+				_safe_pixel(img, rx + 3, ry - 3, DB32.yellow)
+			2:
+				_rect(img, rx - 4, ry, 9, 1, DB32.yellow)
+				_rect(img, rx, ry - 4, 1, 9, DB32.yellow)
+			3:
+				_safe_pixel(img, rx - 3, ry - 3, DB32.pure_white)
+				_safe_pixel(img, rx + 3, ry + 3, DB32.pure_white)
+				_safe_pixel(img, rx - 3, ry + 3, DB32.pure_white)
+				_safe_pixel(img, rx + 3, ry - 3, DB32.pure_white)
+
+		# 7. Колеса (переднее спаренное Terra Trac диаметром 11, заднее диаметром 7)
+		# Переднее ведущее колесо
+		_circle(img, ox + 25, 18, 5, DB32.charcoal)
+		_circle(img, ox + 25, 18, 2, DB32.yellow)
+		# Заднее управляемое колесо
+		_circle(img, ox + 11, 19, 4, DB32.charcoal)
+		_circle(img, ox + 11, 19, 1, DB32.yellow)
+
+	return img
+
+
+# ==============================================================================
+# 24. МАГИСТРАЛЬНЫЙ АВТОПОЕЗД-ЗЕРНОВОЗ «КАМАЗ 65207» (192x20, 4 кадра по 48x20)
+# ==============================================================================
+static func _generate_truck_v2() -> Image:
+	var img: Image = Image.create(192, 20, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+
+	for frame in range(4):
+		var ox: int = frame * 48
+
+		# 1. Шасси тягача и прицепа
+		_rect(img, ox + 2, 14, 44, 2, DB32.charcoal)
+		# Сцепка между кузовом тягача и прицепом (ox + 17 .. ox + 21)
+		_rect(img, ox + 17, 14, 4, 1, DB32.slate)
+
+		# 2. Кабина КАМАЗ 65207 спереди (ox + 35 .. ox + 46)
+		_rect(img, ox + 36, 4, 10, 11, DB32.deep_blue)
+		_rect(img, ox + 35, 2, 12, 3, DB32.pure_white) # аэродинамический спойлер
+		_rect(img, ox + 40, 5, 6, 5, DB32.cyan)        # лобовое и боковое стекло
+		_rect(img, ox + 44, 10, 2, 3, DB32.yellow)     # двойные фары
+		_rect(img, ox + 40, 11, 4, 3, DB32.charcoal)   # решетка радиатора
+		_rect(img, ox + 36, 2, 2, 3, DB32.slate)      # вертикальный выхлоп
+
+		# 3. Кузов 1 (на тягаче: ox + 21 .. ox + 35, y: 7..14)
+		_rect(img, ox + 21, 7, 14, 8, DB32.slate)
+		_rect(img, ox + 21, 13, 14, 1, DB32.yellow)    # светоотражающая полоса
+		_rect(img, ox + 21, 7, 1, 8, DB32.charcoal)
+		_rect(img, ox + 34, 7, 1, 8, DB32.charcoal)
+
+		# 4. Кузов 2 (прицеп: ox + 2 .. ox + 17, y: 7..14)
+		_rect(img, ox + 2, 7, 15, 8, DB32.slate)
+		_rect(img, ox + 2, 13, 15, 1, DB32.yellow)     # светоотражающая полоса
+		_rect(img, ox + 2, 7, 1, 8, DB32.charcoal)
+		_rect(img, ox + 16, 7, 1, 8, DB32.charcoal)
+
+		# 5. Заполнение зерном обоих кузовов (4 стадии)
+		if frame >= 1:
+			_rect(img, ox + 4, 11, 11, 3, DB32.gold)
+			_rect(img, ox + 23, 11, 10, 3, DB32.gold)
+		if frame >= 2:
+			_rect(img, ox + 4, 9, 11, 3, DB32.yellow)
+			_rect(img, ox + 23, 9, 10, 3, DB32.yellow)
+		if frame == 3:
+			_rect(img, ox + 5, 7, 9, 2, DB32.yellow)
+			_rect(img, ox + 7, 6, 5, 1, DB32.pure_white)
+			_rect(img, ox + 24, 7, 8, 2, DB32.yellow)
+			_rect(img, ox + 26, 6, 4, 1, DB32.pure_white)
+
+		# 6. Колеса автопоезда (5 осей, диаметр 7)
+		# Прицеп (2 оси)
+		_circle(img, ox + 6, 16, 3, DB32.charcoal)
+		_circle(img, ox + 6, 16, 1, DB32.light_grey)
+		_circle(img, ox + 13, 16, 3, DB32.charcoal)
+		_circle(img, ox + 13, 16, 1, DB32.light_grey)
+		# Тягач задняя тележка (2 оси)
+		_circle(img, ox + 25, 16, 3, DB32.charcoal)
+		_circle(img, ox + 25, 16, 1, DB32.light_grey)
+		_circle(img, ox + 32, 16, 3, DB32.charcoal)
+		_circle(img, ox + 32, 16, 1, DB32.light_grey)
+		# Тягач передняя рулевая ось (1 ось)
+		_circle(img, ox + 42, 16, 3, DB32.charcoal)
+		_circle(img, ox + 42, 16, 1, DB32.light_grey)
+
+	return img
+

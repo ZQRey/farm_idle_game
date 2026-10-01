@@ -207,6 +207,22 @@ func _process_events_timer(delta: float) -> void:
 		if not is_strike_active and not is_breakdown_active and not GameManager.is_stuck_in_mud:
 			_try_trigger_random_event()
 
+func can_breakdown_occur() -> bool:
+	if field_fsm == null:
+		return false
+	match field_fsm.current_state:
+		FieldFSM.State.PLOWING:
+			return true
+		FieldFSM.State.SOWING:
+			# Только если на поле работает трактор с сеялкой! Сеятели-люди не ломаются!
+			return GameManager.has_seeder_tractor
+		FieldFSM.State.HARVESTING:
+			return true
+		FieldFSM.State.HAULING:
+			return true
+		_:
+			return false
+
 func _try_trigger_random_event() -> void:
 	if field_fsm == null or current_weather == Weather.NIGHT:
 		return
@@ -219,7 +235,7 @@ func _try_trigger_random_event() -> void:
 		print("[EventManager] 🦅 Стая ворон прилетела на поле!")
 	elif roll < 0.35 and field_fsm.current_state == FieldFSM.State.SOWING and not GameManager.has_seeder_tractor:
 		trigger_strike()
-	elif roll < 0.50:
+	elif roll < 0.50 and can_breakdown_occur():
 		trigger_breakdown()
 
 # 1. ЗАБАСТОВКА
@@ -259,7 +275,7 @@ func _process_active_strike(delta: float) -> void:
 
 # 2. ПОЛОМКА ТЕХНИКИ ИЛИ ВЫТАСКИВАНИЕ ИЗ ГРЯЗИ
 func trigger_breakdown() -> void:
-	if is_breakdown_active:
+	if is_breakdown_active or not can_breakdown_occur():
 		return
 	is_breakdown_active = true
 	GameManager.is_broken_down = true

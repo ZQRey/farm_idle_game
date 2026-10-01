@@ -39,11 +39,14 @@ var crop_stages: Array[int] = []   # Стадии растений: -1=нет, 0
 var tex_soil: Texture2D
 var tex_crops: Texture2D
 var tex_tractor: Texture2D
+var tex_tractor_v2: Texture2D
 var tex_tractor_seeder: Texture2D
 var tex_worker: Texture2D
 var tex_tanker: Texture2D
 var tex_harvester: Texture2D
+var tex_harvester_v2: Texture2D
 var tex_truck: Texture2D
+var tex_truck_v2: Texture2D
 var tex_crisis: Texture2D
 var tex_pickup: Texture2D
 var tex_smoke_fire: Texture2D
@@ -122,11 +125,14 @@ func _load_textures() -> void:
 	tex_soil = AssetGenerator.get_texture("soil_tiles.png")
 	tex_crops = AssetGenerator.get_texture("crops_sheet.png")
 	tex_tractor = AssetGenerator.get_texture("tractor.png")
+	tex_tractor_v2 = AssetGenerator.get_texture("tractor_v2.png")
 	tex_tractor_seeder = AssetGenerator.get_texture("tractor_seeder.png")
 	tex_worker = AssetGenerator.get_texture("worker_sower.png")
 	tex_tanker = AssetGenerator.get_texture("water_tanker.png")
 	tex_harvester = AssetGenerator.get_texture("harvester.png")
+	tex_harvester_v2 = AssetGenerator.get_texture("harvester_v2.png")
 	tex_truck = AssetGenerator.get_texture("truck_sheet.png")
+	tex_truck_v2 = AssetGenerator.get_texture("truck_v2.png")
 	tex_crisis = AssetGenerator.get_texture("crisis_objects.png")
 	tex_pickup = AssetGenerator.get_texture("pickup_repair.png")
 	tex_smoke_fire = AssetGenerator.get_texture("smoke_fire_sheet.png")
@@ -282,8 +288,12 @@ func _update_fsm(delta: float) -> void:
 		for rw in resting_workers:
 			rw.visible = false
 
-	# 2. ПОЛОМКА ТЕХНИКИ: идет черный дым и пламя
-	if is_breakdown_active:
+	# 2. ПОЛОМКА ТЕХНИКИ: идет черный дым и пламя (только когда на поле работает техника)
+	var has_active_vehicle: bool = (current_state != State.GROWING and current_state != State.WATERING)
+	if current_state == State.SOWING and not GameManager.has_seeder_tractor:
+		has_active_vehicle = false
+
+	if is_breakdown_active and has_active_vehicle:
 		smoke_fire_sprite.visible = true
 		smoke_fire_sprite.position = Vector2(vehicle_x + 12.0, GROUND_Y - 56.0)
 		smoke_fire_sprite.frame = int(anim_timer * 8.0) % 4
@@ -400,26 +410,39 @@ func _scare_crow_away(crow: Sprite2D) -> void:
 # ------------------------------------------------------------------------------
 func _start_plowing() -> void:
 	vehicle_sprite.visible = true
-	vehicle_sprite.texture = tex_tractor
-	vehicle_sprite.hframes = 1
-	vehicle_sprite.frame = 0
-	vehicle_sprite.modulate = GameManager.tractor_color
-	vehicle_x = -70.0
-	vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
+	if GameManager.has_heavy_tractor:
+		vehicle_sprite.texture = tex_tractor_v2
+		vehicle_sprite.hframes = 2
+		vehicle_sprite.frame = 0
+		vehicle_sprite.modulate = Color.WHITE
+		vehicle_x = -96.0
+		vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 40.0)
+	else:
+		vehicle_sprite.texture = tex_tractor
+		vehicle_sprite.hframes = 1
+		vehicle_sprite.frame = 0
+		vehicle_sprite.modulate = GameManager.tractor_color
+		vehicle_x = -70.0
+		vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
 	particles_soil.emitting = true
 
 func _process_plowing(delta: float, speed: float) -> void:
-	vehicle_x += speed * delta
-	vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
+	var plowing_speed: float = speed * (1.6 if GameManager.has_heavy_tractor else 1.0)
+	vehicle_x += plowing_speed * delta
+	var spr_y: float = GROUND_Y - 40.0 if GameManager.has_heavy_tractor else GROUND_Y - 32.0
+	vehicle_sprite.position = Vector2(vehicle_x, spr_y)
 	particles_soil.position = Vector2(vehicle_x + 10, GROUND_Y - 4.0)
 
-	var plow_x: float = vehicle_x + 8.0
+	if GameManager.has_heavy_tractor:
+		vehicle_sprite.frame = int(anim_timer * 6.0) % 2
+
+	var plow_x: float = vehicle_x + (16.0 if GameManager.has_heavy_tractor else 8.0)
 	var seg_idx: int = int(plow_x / float(TILE_SIZE))
 	for i in range(max(0, seg_idx - 1), min(segment_count, seg_idx + 2)):
 		if soil_segments[i] == 0:
 			soil_segments[i] = 1
 
-	if vehicle_x > screen_width + 40:
+	if vehicle_x > screen_width + 80:
 		particles_soil.emitting = false
 		change_state(State.SOWING)
 
@@ -542,25 +565,38 @@ func _process_growing(delta: float) -> void:
 # ------------------------------------------------------------------------------
 func _start_harvesting() -> void:
 	vehicle_sprite.visible = true
-	vehicle_sprite.texture = tex_harvester
-	vehicle_sprite.hframes = 3
+	if GameManager.has_super_harvester:
+		vehicle_sprite.texture = tex_harvester_v2
+		vehicle_sprite.hframes = 4
+		vehicle_sprite.frame = 0
+		vehicle_x = -100.0
+		vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 48.0)
+	else:
+		vehicle_sprite.texture = tex_harvester
+		vehicle_sprite.hframes = 3
+		vehicle_sprite.frame = 0
+		vehicle_x = -80.0
+		vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 40.0)
 	vehicle_sprite.modulate = Color.WHITE
-	vehicle_x = -80.0
-	vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 40.0)
 
 func _process_harvesting(delta: float, speed: float) -> void:
-	vehicle_x += speed * 0.9 * delta
-	vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 40.0)
-	vehicle_sprite.frame = int(anim_timer * 9.0) % 3
+	var harv_speed: float = speed * (1.6 if GameManager.has_super_harvester else 0.9)
+	vehicle_x += harv_speed * delta
+	var spr_y: float = GROUND_Y - 48.0 if GameManager.has_super_harvester else GROUND_Y - 40.0
+	vehicle_sprite.position = Vector2(vehicle_x, spr_y)
+	if GameManager.has_super_harvester:
+		vehicle_sprite.frame = int(anim_timer * 8.0) % 4
+	else:
+		vehicle_sprite.frame = int(anim_timer * 9.0) % 3
 
-	var cutter_x: float = vehicle_x + 48.0
+	var cutter_x: float = vehicle_x + (54.0 if GameManager.has_super_harvester else 48.0)
 	var seg: int = int(cutter_x / float(TILE_SIZE))
 	for i in range(max(0, seg - 1), min(segment_count, seg + 2)):
 		if crop_stages[i] != -1:
 			crop_stages[i] = -1
 			soil_segments[i] = 3
 
-	if vehicle_x > screen_width + 60:
+	if vehicle_x > screen_width + 80:
 		change_state(State.HAULING)
 
 # ------------------------------------------------------------------------------
@@ -568,29 +604,42 @@ func _process_harvesting(delta: float, speed: float) -> void:
 # ------------------------------------------------------------------------------
 func _start_hauling() -> void:
 	vehicle_sprite.visible = true
-	vehicle_sprite.texture = tex_truck
-	vehicle_sprite.hframes = 4
-	vehicle_sprite.frame = 0
+	if GameManager.has_road_train:
+		vehicle_sprite.texture = tex_truck_v2
+		vehicle_sprite.hframes = 4
+		vehicle_sprite.frame = 0
+		vehicle_x = -100.0
+		vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 40.0)
+	else:
+		vehicle_sprite.texture = tex_truck
+		vehicle_sprite.hframes = 4
+		vehicle_sprite.frame = 0
+		vehicle_x = -70.0
+		vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
 	vehicle_sprite.modulate = Color.WHITE
-	vehicle_x = -70.0
-	vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
 	truck_fill_stage = 0
 
 func _process_hauling(delta: float, speed: float) -> void:
-	vehicle_x += speed * 1.1 * delta
-	vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
+	var haul_speed: float = speed * (1.9 if GameManager.has_road_train else 1.1)
+	vehicle_x += haul_speed * delta
+	var spr_y: float = GROUND_Y - 40.0 if GameManager.has_road_train else GROUND_Y - 32.0
+	vehicle_sprite.position = Vector2(vehicle_x, spr_y)
 
 	var frac: float = clamp(vehicle_x / float(screen_width), 0.0, 1.0)
 	truck_fill_stage = int(frac * 3.0)
 	vehicle_sprite.frame = truck_fill_stage
 
-	if vehicle_x > screen_width + 50:
+	if vehicle_x > screen_width + 80:
 		_finish_hauling_cycle()
 
 func _finish_hauling_cycle() -> void:
 	var crop_data: Dictionary = GameManager.get_current_crop_data()
 	var base_reward: int = int(crop_data.get("base_reward", 35))
 	
+	# Бонус супер-комбайна (+15% к урожайности)
+	if GameManager.has_super_harvester:
+		base_reward = int(base_reward * 1.15)
+
 	# Бонус амбара (+20%)
 	if GameManager.has_barn:
 		base_reward = int(base_reward * 1.20)

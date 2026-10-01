@@ -31,6 +31,9 @@ signal bankruptcy_requested
 @onready var lbl_speed_level: Label = $VBox/TabContainer/Улучшения/ScrollUpgrades/VBox/ItemSpeed/LblSpeedVal
 
 # Декор и Гараж
+@onready var btn_buy_heavy_tractor: Button = $"VBox/TabContainer/Декор и Гараж/VBoxGarage/ItemHeavyTractor/HBox/BtnBuyHeavyTractor"
+@onready var btn_buy_super_harvester: Button = $"VBox/TabContainer/Декор и Гараж/VBoxGarage/ItemSuperHarvester/HBox/BtnBuySuperHarvester"
+@onready var btn_buy_road_train: Button = $"VBox/TabContainer/Декор и Гараж/VBoxGarage/ItemRoadTrain/HBox/BtnBuyRoadTrain"
 @onready var color_picker: ColorPickerButton = $"VBox/TabContainer/Декор и Гараж/VBoxGarage/HBoxColor/ColorPicker"
 @onready var opt_decor: OptionButton = $"VBox/TabContainer/Декор и Гараж/VBoxGarage/HBoxDecorSelect/OptDecor"
 @onready var lbl_decor_price: Label = $"VBox/TabContainer/Декор и Гараж/VBoxGarage/HBoxDecorBuy/LblDecorPrice"
@@ -75,6 +78,11 @@ const DECOR_CATALOG: Dictionary = {
 
 func _ready() -> void:
 	close_requested.connect(_on_close_requested)
+	if tab_container != null:
+		tab_container.tab_changed.connect(func(_idx: int):
+			_refresh_seeds_ui()
+			_update_ui()
+		)
 	_setup_window_position()
 	_setup_monitors_list()
 	_setup_graphics_and_fps()
@@ -217,6 +225,31 @@ func _update_ui() -> void:
 		btn_repay_loan.disabled = (GameManager.loan_debt <= 0) or (GameManager.coins < GameManager.loan_debt)
 		btn_repay_loan.text = "Погасить (%d 🪙)" % GameManager.loan_debt if GameManager.loan_debt > 0 else "Погасить досрочно"
 
+	# Модернизация автопарка (новая техника)
+	if btn_buy_heavy_tractor != null:
+		if GameManager.has_heavy_tractor:
+			btn_buy_heavy_tractor.text = "Куплено ✔"
+			btn_buy_heavy_tractor.disabled = true
+		else:
+			btn_buy_heavy_tractor.text = "Купить (800 🪙)"
+			btn_buy_heavy_tractor.disabled = GameManager.coins < 800
+
+	if btn_buy_super_harvester != null:
+		if GameManager.has_super_harvester:
+			btn_buy_super_harvester.text = "Куплено ✔"
+			btn_buy_super_harvester.disabled = true
+		else:
+			btn_buy_super_harvester.text = "Купить (1200 🪙)"
+			btn_buy_super_harvester.disabled = GameManager.coins < 1200
+
+	if btn_buy_road_train != null:
+		if GameManager.has_road_train:
+			btn_buy_road_train.text = "Куплено ✔"
+			btn_buy_road_train.disabled = true
+		else:
+			btn_buy_road_train.text = "Купить (950 🪙)"
+			btn_buy_road_train.disabled = GameManager.coins < 950
+
 func _refresh_seeds_ui() -> void:
 	if seed_container == null:
 		return
@@ -239,30 +272,35 @@ func _refresh_seeds_ui() -> void:
 		hbox.add_child(lbl_info)
 
 		var btn: Button = Button.new()
-		btn.custom_minimum_size = Vector2(140, 36)
+		btn.custom_minimum_size = Vector2(160, 36)
 
-		if not c_data.unlocked:
-			btn.text = "Открыть (%d 🪙)" % c_data.seed_cost
-			btn.disabled = GameManager.coins < c_data.seed_cost
-			btn.pressed.connect(func():
-				if GameManager.spend_coins(c_data.seed_cost):
-					c_data.unlocked = true
-					GameManager.current_crop = crop_id
+		var this_cid: String = str(crop_id)
+		var this_cost: int = int(c_data.seed_cost)
+		var is_unlocked: bool = bool(c_data.unlocked)
+
+		if not is_unlocked:
+			btn.text = "Открыть (%d 🪙)" % this_cost
+			btn.disabled = GameManager.coins < this_cost
+			btn.pressed.connect(func(target_cid: String = this_cid, target_cost: int = this_cost):
+				if GameManager.spend_coins(target_cost):
+					GameManager.CROPS[target_cid]["unlocked"] = true
+					GameManager.current_crop = target_cid
 					GameManager.save_to_settings()
 					_refresh_seeds_ui()
 					_update_ui()
 			)
 		else:
-			if GameManager.current_crop == crop_id:
-				btn.text = "Выбрано ✔"
+			if GameManager.current_crop == this_cid:
+				btn.text = "Выбрано для сева ✔"
 				btn.disabled = true
 			else:
-				btn.text = "Засеять"
+				btn.text = "Выбрать для сева"
 				btn.disabled = false
-				btn.pressed.connect(func():
-					GameManager.current_crop = crop_id
+				btn.pressed.connect(func(target_cid: String = this_cid):
+					GameManager.current_crop = target_cid
 					GameManager.save_to_settings()
 					_refresh_seeds_ui()
+					_update_ui()
 				)
 
 		hbox.add_child(btn)
@@ -321,6 +359,30 @@ func _setup_upgrades_tab() -> void:
 	)
 
 func _setup_garage_and_decor() -> void:
+	if btn_buy_heavy_tractor != null:
+		btn_buy_heavy_tractor.pressed.connect(func():
+			if GameManager.spend_coins(800):
+				GameManager.has_heavy_tractor = true
+				GameManager.save_to_settings()
+				_update_ui()
+		)
+
+	if btn_buy_super_harvester != null:
+		btn_buy_super_harvester.pressed.connect(func():
+			if GameManager.spend_coins(1200):
+				GameManager.has_super_harvester = true
+				GameManager.save_to_settings()
+				_update_ui()
+		)
+
+	if btn_buy_road_train != null:
+		btn_buy_road_train.pressed.connect(func():
+			if GameManager.spend_coins(950):
+				GameManager.has_road_train = true
+				GameManager.save_to_settings()
+				_update_ui()
+		)
+
 	color_picker.color = GameManager.tractor_color
 	color_picker.color_changed.connect(func(c: Color):
 		GameManager.tractor_color = c
@@ -432,24 +494,28 @@ func _setup_finances_tab() -> void:
 	if btn_take_subsidy != null:
 		btn_take_subsidy.pressed.connect(func():
 			if GameManager.take_subsidy():
+				_refresh_seeds_ui()
 				_update_ui()
 		)
 
 	if btn_repay_subsidy != null:
 		btn_repay_subsidy.pressed.connect(func():
 			if GameManager.repay_subsidy_early():
+				_refresh_seeds_ui()
 				_update_ui()
 		)
 
 	if btn_take_loan != null:
 		btn_take_loan.pressed.connect(func():
 			if GameManager.take_bank_loan():
+				_refresh_seeds_ui()
 				_update_ui()
 		)
 
 	if btn_repay_loan != null:
 		btn_repay_loan.pressed.connect(func():
 			if GameManager.repay_loan_early():
+				_refresh_seeds_ui()
 				_update_ui()
 		)
 
