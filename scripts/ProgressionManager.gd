@@ -124,6 +124,15 @@ static func add_harvest_progress(crop_id: String) -> Dictionary:
 	var gained: int = int(HARVEST_XP.get(crop_id, 18))
 	return add_xp(gained, 1)
 
+static func ensure_minimum_level(minimum_level: int) -> bool:
+	var target_level: int = clampi(minimum_level, 1, MAX_LEVEL)
+	if farm_level >= target_level:
+		return false
+	farm_level = target_level
+	xp = 0
+	save_to_settings()
+	return true
+
 static func get_crop_required_level(crop_id: String) -> int:
 	return int(CROP_LEVELS.get(crop_id, 1))
 
