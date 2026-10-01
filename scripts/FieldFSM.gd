@@ -964,13 +964,18 @@ func _finish_hauling_cycle() -> void:
 		else:
 			bonus_text += " [Склад +%.0f кг]" % stored_kg
 
-	# Переполнение не уничтожает урожай: излишек аварийно продаётся по 70% фиксированной цены.
+	# При ручном хранении переполнение продаётся аварийно за 70%.
+	# В режиме автопродажи новый урожай продаётся по полной цене даже если старые запасы уже заняли склад.
 	if overflow_kg > 0.0:
-		var overflow_gross: int = int(round(float(GameManager.calculate_crop_sale_value(crop_id, overflow_kg)) * 0.70))
+		var overflow_factor: float = 1.0 if InventoryManager.auto_sell_on_harvest else 0.70
+		var overflow_gross: int = int(round(float(GameManager.calculate_crop_sale_value(crop_id, overflow_kg)) * overflow_factor))
 		var overflow_sale: Dictionary = GameManager.process_sale_finances(overflow_gross)
 		transaction_net += int(overflow_sale.get("net_coins", 0))
 		total_debt_paid += int(overflow_sale.get("subsidy_paid", 0)) + int(overflow_sale.get("loan_paid", 0))
-		bonus_text += " [Переполнение %.0f кг → 70%%]" % overflow_kg
+		if InventoryManager.auto_sell_on_harvest:
+			bonus_text += " [Автопродажа %.0f кг]" % overflow_kg
+		else:
+			bonus_text += " [Переполнение %.0f кг → 70%%]" % overflow_kg
 
 	GameManager.total_harvested += 1
 
