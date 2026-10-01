@@ -167,7 +167,7 @@ func _setup_progression_ui() -> void:
 	vbox.add_child(top_row)
 
 	lbl_farm_level = Label.new()
-	lbl_farm_level.theme_override_font_sizes.font_size = 15
+	lbl_farm_level.add_theme_font_size_override("font_size", 15)
 	top_row.add_child(lbl_farm_level)
 
 	lbl_reputation = Label.new()
