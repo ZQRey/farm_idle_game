@@ -3,6 +3,7 @@ extends Window
 
 const GameManager = preload("res://scripts/GameManager.gd")
 const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
+const ContractManager = preload("res://scripts/ContractManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 
@@ -31,6 +32,9 @@ var lbl_reputation: Label
 var xp_bar: ProgressBar
 var lbl_xp_progress: Label
 var lbl_next_unlock: Label
+
+# Контракты (динамическая вкладка)
+var contracts_container: VBoxContainer
 
 # Магазин семян
 @onready var seed_container: VBoxContainer = $VBox/TabContainer/Магазин/ScrollSeeds/VBoxSeeds
@@ -121,6 +125,7 @@ func _ready() -> void:
 		tab_container.tab_changed.connect(_on_tab_changed)
 	_setup_window_position()
 	_setup_progression_ui()
+	_setup_contracts_tab()
 	_setup_monitors_list()
 	_setup_graphics_and_fps()
 	_setup_garage_and_decor()
@@ -205,6 +210,177 @@ func _apply_feature_purchase_state(button: Button, feature_id: String, available
 		button.text = available_text
 		button.disabled = GameManager.coins < cost
 
+func _setup_contracts_tab() -> void:
+	if contracts_container != null:
+		return
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.name = "Контракты"
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	tab_container.add_child(margin)
+
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
+
+	contracts_container = VBoxContainer.new()
+	contracts_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	contracts_container.add_theme_constant_override("separation", 10)
+	scroll.add_child(contracts_container)
+
+func _format_contract_time(seconds: int) -> String:
+	var safe_seconds: int = max(0, seconds)
+	var hours: int = int(safe_seconds / 3600)
+	var minutes: int = int((safe_seconds % 3600) / 60)
+	var secs: int = safe_seconds % 60
+	if hours > 0:
+		return "%d:%02d:%02d" % [hours, minutes, secs]
+	return "%02d:%02d" % [minutes, secs]
+
+func _make_contract_panel(contract: Dictionary, is_active: bool) -> PanelContainer:
+	var panel: PanelContainer = PanelContainer.new()
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 5)
+	panel.add_child(vbox)
+
+	var title_row: HBoxContainer = HBoxContainer.new()
+	vbox.add_child(title_row)
+
+	var title: Label = Label.new()
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.add_theme_font_size_override("font_size", 15)
+	title.text = "%s — %s" % [
+		str(contract.get("title", "📦 Контракт")),
+		str(contract.get("crop_name", "Урожай"))
+	]
+	title_row.add_child(title)
+
+	var time_left: Label = Label.new()
+	time_left.text = "⏳ %s" % _format_contract_time(ContractManager.get_seconds_left(contract))
+	title_row.add_child(time_left)
+
+	var target: int = max(1, int(contract.get("target", 1)))
+	var progress: int = int(contract.get("progress", 0)) if is_active else 0
+
+	var description: Label = Label.new()
+	description.text = "Поставить урожай: %d цикл(а/ов) | Награда: %d 🪙 + %d XP + %d реп." % [
+		target,
+		int(contract.get("reward_coins", 0)),
+		int(contract.get("reward_xp", 0)),
+		int(contract.get("reward_rep", 0))
+	]
+	vbox.add_child(description)
+
+	var action_row: HBoxContainer = HBoxContainer.new()
+	action_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(action_row)
+
+	if is_active:
+		var progress_bar: ProgressBar = ProgressBar.new()
+		progress_bar.min_value = 0
+		progress_bar.max_value = target
+		progress_bar.value = progress
+		progress_bar.show_percentage = false
+		progress_bar.custom_minimum_size = Vector2(220, 20)
+		progress_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		action_row.add_child(progress_bar)
+
+		var progress_label: Label = Label.new()
+		progress_label.text = "%d / %d" % [progress, target]
+		action_row.add_child(progress_label)
+
+		var abandon: Button = Button.new()
+		abandon.text = "Отказаться"
+		var active_id: String = str(contract.get("id", ""))
+		abandon.pressed.connect(func(target_id: String = active_id):
+			if ContractManager.abandon_contract(target_id):
+				_refresh_contracts_ui()
+				_update_ui()
+		)
+		action_row.add_child(abandon)
+	else:
+		var hint: Label = Label.new()
+		hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hint.text = "Прогресс начнётся автоматически после принятия."
+		action_row.add_child(hint)
+
+		var accept: Button = Button.new()
+		accept.text = "Принять"
+		accept.disabled = ContractManager.active_contracts.size() >= ContractManager.MAX_ACTIVE_CONTRACTS
+		var offer_id: String = str(contract.get("id", ""))
+		accept.pressed.connect(func(target_id: String = offer_id):
+			if ContractManager.accept_contract(target_id):
+				_refresh_contracts_ui()
+				_update_ui()
+		)
+		action_row.add_child(accept)
+
+	return panel
+
+func _refresh_contracts_ui() -> void:
+	if contracts_container == null:
+		return
+
+	for child in contracts_container.get_children():
+		child.queue_free()
+
+	if not ContractManager.initialized:
+		var loading: Label = Label.new()
+		loading.text = "📋 Контрактный центр загружается..."
+		contracts_container.add_child(loading)
+		return
+
+	ContractManager.refresh_board(false)
+
+	var summary: Label = Label.new()
+	summary.add_theme_font_size_override("font_size", 16)
+	summary.text = "📋 Контрактный центр | Активно: %d/%d | Выполнено: %d | Провалено: %d" % [
+		ContractManager.active_contracts.size(),
+		ContractManager.MAX_ACTIVE_CONTRACTS,
+		ContractManager.total_completed,
+		ContractManager.total_failed
+	]
+	contracts_container.add_child(summary)
+
+	var stats: Label = Label.new()
+	stats.text = "💰 Заработано на контрактах: %d 🪙 | Новая доска через: %s" % [
+		ContractManager.total_contract_coins,
+		_format_contract_time(ContractManager.get_board_refresh_seconds_left())
+	]
+	contracts_container.add_child(stats)
+
+	var active_title: Label = Label.new()
+	active_title.add_theme_font_size_override("font_size", 15)
+	active_title.text = "🚜 Активные контракты"
+	contracts_container.add_child(active_title)
+
+	if ContractManager.active_contracts.is_empty():
+		var none_active: Label = Label.new()
+		none_active.text = "Нет активных контрактов. Можно принять до %d одновременно." % ContractManager.MAX_ACTIVE_CONTRACTS
+		contracts_container.add_child(none_active)
+	else:
+		for contract in ContractManager.active_contracts:
+			if contract is Dictionary:
+				contracts_container.add_child(_make_contract_panel(contract, true))
+
+	var offers_title: Label = Label.new()
+	offers_title.add_theme_font_size_override("font_size", 15)
+	offers_title.text = "📨 Доступные предложения"
+	contracts_container.add_child(offers_title)
+
+	if ContractManager.offers.is_empty():
+		var empty_board: Label = Label.new()
+		empty_board.text = "Все предложения этой доски уже разобраны. Новые появятся через %s." % _format_contract_time(ContractManager.get_board_refresh_seconds_left())
+		contracts_container.add_child(empty_board)
+	else:
+		for offer in ContractManager.offers:
+			if offer is Dictionary:
+				contracts_container.add_child(_make_contract_panel(offer, false))
+
 func _setup_repair_buttons() -> void:
 	var do_repair = func():
 		repair_requested.emit()
@@ -220,6 +396,8 @@ func _setup_repair_buttons() -> void:
 		)
 
 func _update_ui() -> void:
+	_refresh_contracts_ui()
+
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins
 

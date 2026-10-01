@@ -5,6 +5,7 @@ const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 const GameManager = preload("res://scripts/GameManager.gd")
 const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
+const ContractManager = preload("res://scripts/ContractManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 
@@ -12,6 +13,7 @@ func _init() -> void:
 	print("--- НАЧАЛО ТЕСТИРОВАНИЯ НОВЫХ ФУНКЦИЙ ---")
 	SettingsManager.load_settings()
 	GameManager.init_from_settings()
+	ContractManager.init_from_settings()
 
 	# 1. Тест: Множитель прибыли от мониторов
 	print("\n[ТЕСТ 1] Проверка множителя прибыли от мониторов:")
@@ -162,6 +164,64 @@ func _init() -> void:
 	ProgressionManager.lifetime_xp = old_lifetime_xp
 	ProgressionManager.save_to_settings()
 	print("  ✔ ТЕСТ 6 УСПЕШНО ПРОЙДЕН!")
+
+	# 7. Тест: принятие, прогресс, сохранение и завершение контракта
+	print("\n[ТЕСТ 7] Проверка системы контрактов:")
+	var old_offers: Array = ContractManager.offers.duplicate(true)
+	var old_active: Array = ContractManager.active_contracts.duplicate(true)
+	var old_refresh_at: int = ContractManager.board_refresh_at
+	var old_next_id: int = ContractManager.next_contract_id
+	var old_completed: int = ContractManager.total_completed
+	var old_failed: int = ContractManager.total_failed
+	var old_contract_coins: int = ContractManager.total_contract_coins
+
+	var now: int = int(Time.get_unix_time_from_system())
+	ContractManager.offers = [{
+		"id": "TEST001",
+		"tier": "standard",
+		"title": "📦 Тестовый заказ",
+		"crop_id": "wheat",
+		"crop_name": "Пшеница",
+		"target": 2,
+		"progress": 0,
+		"reward_coins": 120,
+		"reward_xp": 30,
+		"reward_rep": 2,
+		"expires_at": now + 3600,
+		"created_at": now
+	}]
+	ContractManager.active_contracts = []
+	ContractManager.board_refresh_at = now + 1800
+
+	assert(ContractManager.accept_contract("TEST001"), "Тестовый контракт должен приниматься")
+	assert(ContractManager.active_contracts.size() == 1, "После принятия должен быть один активный контракт")
+
+	var first_rewards: Array = ContractManager.record_harvest("wheat")
+	assert(first_rewards.is_empty(), "После первого из двух урожаев контракт ещё не должен завершаться")
+	assert(int(ContractManager.active_contracts[0].get("progress", 0)) == 1, "Прогресс контракта должен стать 1/2")
+
+	ContractManager.save_to_settings()
+	ContractManager.offers = []
+	ContractManager.active_contracts = []
+	ContractManager.init_from_settings()
+	assert(ContractManager.active_contracts.size() == 1, "Активный контракт должен восстановиться после загрузки")
+	assert(int(ContractManager.active_contracts[0].get("progress", 0)) == 1, "Прогресс 1/2 должен восстановиться")
+
+	var second_rewards: Array = ContractManager.record_harvest("wheat")
+	assert(second_rewards.size() == 1, "Второй урожай должен завершить контракт")
+	assert(int(second_rewards[0].get("coins", 0)) == 120, "Награда тестового контракта должна быть 120 монет")
+	assert(ContractManager.active_contracts.is_empty(), "Выполненный контракт должен удаляться из активных")
+	print("  ✔ ТЕСТ 7 УСПЕШНО ПРОЙДЕН!")
+
+	# Возвращаем контрактное состояние пользователя.
+	ContractManager.offers = old_offers
+	ContractManager.active_contracts = old_active
+	ContractManager.board_refresh_at = old_refresh_at
+	ContractManager.next_contract_id = old_next_id
+	ContractManager.total_completed = old_completed
+	ContractManager.total_failed = old_failed
+	ContractManager.total_contract_coins = old_contract_coins
+	ContractManager.save_to_settings()
 
 	print("\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ! СИСТЕМА ПОЛНОСТЬЮ ИСПРАВНА!")
 	quit(0)

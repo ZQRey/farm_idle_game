@@ -3,6 +3,7 @@ extends Node2D
 
 const GameManager = preload("res://scripts/GameManager.gd")
 const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
+const ContractManager = preload("res://scripts/ContractManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const AssetGenerator = preload("res://tools/AssetGenerator.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
@@ -980,6 +981,23 @@ func _finish_hauling_cycle() -> void:
 		bonus_text += " [XP +%d]" % xp_gained
 	if bool(progression_result.get("leveled_up", false)):
 		bonus_text += " [Ур. %d!]" % ProgressionManager.farm_level
+
+	# Прогресс принятых контрактов. Награды начисляются автоматически при выполнении.
+	var contract_rewards: Array = ContractManager.record_harvest(GameManager.current_crop)
+	if not contract_rewards.is_empty():
+		var contract_coins: int = 0
+		var contract_xp: int = 0
+		var contract_rep: int = 0
+		for reward in contract_rewards:
+			if reward is Dictionary:
+				contract_coins += int(reward.get("coins", 0))
+				contract_xp += int(reward.get("xp", 0))
+				contract_rep += int(reward.get("reputation", 0))
+		if contract_coins > 0:
+			GameManager.add_coins(contract_coins)
+		if contract_xp > 0 or contract_rep > 0:
+			ProgressionManager.add_xp(contract_xp, contract_rep)
+		bonus_text += " [Контракт +%d🪙 +%dXP]" % [contract_coins, contract_xp]
 
 	var debt_paid: int = fin_res.subsidy_paid + fin_res.loan_paid
 	if debt_paid > 0:
