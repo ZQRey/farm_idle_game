@@ -56,6 +56,7 @@ static var next_contract_id: int = 1
 static var total_completed: int = 0
 static var total_failed: int = 0
 static var total_contract_coins: int = 0
+static var initialized: bool = false
 
 static var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
@@ -73,6 +74,7 @@ static func init_from_settings() -> void:
 	total_failed = max(0, int(SettingsManager.config.get_value("contracts", "total_failed", 0)))
 	total_contract_coins = max(0, int(SettingsManager.config.get_value("contracts", "total_contract_coins", 0)))
 
+	initialized = true
 	_expire_active_contracts()
 	refresh_board(false)
 
@@ -90,6 +92,8 @@ static func save_to_settings() -> void:
 	SettingsManager.save_settings()
 
 static func refresh_board(force: bool = false) -> bool:
+	if not initialized:
+		return false
 	var now: int = _now()
 	_expire_active_contracts()
 
@@ -105,6 +109,8 @@ static func refresh_board(force: bool = false) -> bool:
 	return true
 
 static func accept_contract(contract_id: String) -> bool:
+	if not initialized:
+		return false
 	_expire_active_contracts()
 	if active_contracts.size() >= MAX_ACTIVE_CONTRACTS:
 		return false
@@ -125,6 +131,8 @@ static func accept_contract(contract_id: String) -> bool:
 	return false
 
 static func record_harvest(crop_id: String) -> Array:
+	if not initialized:
+		return []
 	_expire_active_contracts()
 	var completed_rewards: Array = []
 	var changed: bool = false
@@ -160,6 +168,8 @@ static func record_harvest(crop_id: String) -> Array:
 	return completed_rewards
 
 static func abandon_contract(contract_id: String) -> bool:
+	if not initialized:
+		return false
 	for i in range(active_contracts.size()):
 		var contract: Dictionary = active_contracts[i]
 		if str(contract.get("id", "")) == contract_id:
@@ -170,6 +180,8 @@ static func abandon_contract(contract_id: String) -> bool:
 	return false
 
 static func reset_all_contracts() -> void:
+	if not initialized:
+		return
 	offers.clear()
 	active_contracts.clear()
 	board_refresh_at = 0
