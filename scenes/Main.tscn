@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://c6xq5b7r4y321"]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/Main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/TrayManager.gd" id="2_tray"]
@@ -19,21 +19,10 @@ script = ExtResource("1_main")
 script = ExtResource("2_tray")
 
 [node name="Field" parent="." instance=ExtResource("3_field")]
+material = SubResource("ShaderMaterial_retro")
 
 [node name="EventManager" type="Node" parent="." node_paths=PackedStringArray("field_fsm")]
 script = ExtResource("4_event")
 field_fsm = NodePath("../Field")
 
 [node name="FarmHQ" parent="." instance=ExtResource("5_farmhq")]
-
-[node name="RetroCanvasLayer" type="CanvasLayer" parent="."]
-layer = 100
-
-[node name="RetroRect" type="ColorRect" parent="RetroCanvasLayer"]
-material = SubResource("ShaderMaterial_retro")
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2

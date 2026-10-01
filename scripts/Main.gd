@@ -14,7 +14,6 @@ const FarmHQ = preload("res://scripts/FarmHQ.gd")
 @onready var field: FieldFSM = $Field
 @onready var event_manager: EventManager = $EventManager
 @onready var farm_hq: FarmHQ = $FarmHQ
-@onready var retro_rect: ColorRect = $RetroCanvasLayer/RetroRect
 
 var shader_material: ShaderMaterial
 
@@ -79,10 +78,9 @@ func _ready() -> void:
 	print("[Main] Farm Idle Companion fully operational!")
 
 func _init_graphics_shader() -> void:
-	if retro_rect != null and retro_rect.material is ShaderMaterial:
-		shader_material = retro_rect.material as ShaderMaterial
+	if field != null and field.material is ShaderMaterial:
+		shader_material = field.material as ShaderMaterial
 		var is_16bit: bool = (SettingsManager.get_graphics_mode() == "16bit")
-		retro_rect.visible = is_16bit
 		shader_material.set_shader_parameter("enabled", is_16bit)
 
 func _on_monitor_changed(screen_index: int) -> void:
@@ -99,8 +97,6 @@ func _on_open_farm_hq() -> void:
 
 func _on_graphics_mode_changed(mode: String) -> void:
 	var is_16bit: bool = (mode == "16bit")
-	if retro_rect != null:
-		retro_rect.visible = is_16bit
 	if shader_material != null:
 		shader_material.set_shader_parameter("enabled", is_16bit)
 	print("[Main] Graphics shader mode: ", mode)

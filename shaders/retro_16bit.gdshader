@@ -2,7 +2,6 @@ shader_type canvas_item;
 
 uniform bool enabled = false;
 uniform float color_depth : hint_range(4.0, 32.0) = 16.0;
-uniform sampler2D screen_texture : hint_screen_texture, filter_nearest;
 
 // Матрица упорядоченного дизеринга Байера 4x4
 const float bayer4x4[16] = float[16](
@@ -13,15 +12,13 @@ const float bayer4x4[16] = float[16](
 );
 
 void fragment() {
-	vec4 col = texture(screen_texture, SCREEN_UV);
+	vec4 col = texture(TEXTURE, UV) * COLOR;
 
 	if (col.a <= 0.001) {
 		COLOR = vec4(0.0);
 	} else if (!enabled) {
-		// 32-bit Native: чистый цвет без квантования
 		COLOR = col;
 	} else {
-		// 16-bit Retro Dithered: матрица Байера + квантование
 		int x = int(mod(FRAGCOORD.x, 4.0));
 		int y = int(mod(FRAGCOORD.y, 4.0));
 		float dither = bayer4x4[y * 4 + x] - 0.5;
