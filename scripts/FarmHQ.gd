@@ -234,8 +234,8 @@ func _setup_contracts_tab() -> void:
 
 func _format_contract_time(seconds: int) -> String:
 	var safe_seconds: int = max(0, seconds)
-	var hours: int = safe_seconds / 3600
-	var minutes: int = (safe_seconds % 3600) / 60
+	var hours: int = int(safe_seconds / 3600)
+	var minutes: int = int((safe_seconds % 3600) / 60)
 	var secs: int = safe_seconds % 60
 	if hours > 0:
 		return "%d:%02d:%02d" % [hours, minutes, secs]
