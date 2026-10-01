@@ -542,7 +542,9 @@ static func process_production_costs() -> Dictionary:
 	var fuel_payment: int = 0
 
 	var base_salary: int = 14 + (0 if has_seeder_tractor else 12) + (greenhouse_count * 8)
-	salary_payment = min(coins, base_salary)
+	# Зарплата является обязательным операционным расходом. При хранении урожая
+	# казна может временно уйти в минус до последующей продажи запасов.
+	salary_payment = base_salary
 	coins -= salary_payment
 	total_salaries_paid += salary_payment
 
