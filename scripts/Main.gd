@@ -7,6 +7,7 @@ const TrayManager = preload("res://scripts/TrayManager.gd")
 const AssetGenerator = preload("res://tools/AssetGenerator.gd")
 const GameManager = preload("res://scripts/GameManager.gd")
 const ContractManager = preload("res://scripts/ContractManager.gd")
+const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 const FarmHQ = preload("res://scripts/FarmHQ.gd")
@@ -26,6 +27,9 @@ func _ready() -> void:
 	SettingsManager.load_settings()
 	GameManager.init_from_settings()
 	ContractManager.init_from_settings()
+	InventoryManager.init_from_settings()
+	if GameManager.has_barn:
+		InventoryManager.ensure_minimum_level(2)
 	farm_hq._update_ui()
 
 	# 2. Ограничение FPS (по умолчанию 30 FPS для минимальной нагрузки)
@@ -154,7 +158,9 @@ func _on_bankruptcy_requested() -> void:
 	field.reset_field_to_start()
 	event_manager.reset_all_events()
 	ContractManager.reset_all_contracts()
+	InventoryManager.reset_all()
 	farm_hq._refresh_contracts_ui()
+	farm_hq._refresh_storage_ui()
 	farm_hq._update_ui()
 	print("[Main] Ферма объявила банкротство: долги списаны, поле и техника сброшены!")
 
@@ -175,6 +181,7 @@ func _on_police_bribe() -> void:
 func save_all_state() -> void:
 	GameManager.save_to_settings()
 	ContractManager.save_to_settings()
+	InventoryManager.save_to_settings()
 	if field != null:
 		field.save_field_state()
 	if event_manager != null:
