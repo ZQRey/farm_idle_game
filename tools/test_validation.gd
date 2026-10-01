@@ -13,6 +13,7 @@ func _init() -> void:
 	print("--- НАЧАЛО ТЕСТИРОВАНИЯ НОВЫХ ФУНКЦИЙ ---")
 	SettingsManager.load_settings()
 	GameManager.init_from_settings()
+	ContractManager.init_from_settings()
 
 	# 1. Тест: Множитель прибыли от мониторов
 	print("\n[ТЕСТ 1] Проверка множителя прибыли от мониторов:")
