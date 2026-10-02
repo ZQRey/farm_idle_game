@@ -6,6 +6,7 @@ const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const ContractManager = preload("res://scripts/ContractManager.gd")
 const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const MarketManager = preload("res://scripts/MarketManager.gd")
+const VehicleManager = preload("res://scripts/VehicleManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 
@@ -43,6 +44,9 @@ var storage_container: VBoxContainer
 
 # Рынок (динамическая вкладка)
 var market_container: VBoxContainer
+
+# Garage 2.0 (динамическая вкладка)
+var fleet_container: VBoxContainer
 
 # Магазин семян
 @onready var seed_container: VBoxContainer = $VBox/TabContainer/Магазин/ScrollSeeds/VBoxSeeds
@@ -136,6 +140,7 @@ func _ready() -> void:
 	_setup_contracts_tab()
 	_setup_storage_tab()
 	_setup_market_tab()
+	_setup_fleet_tab()
 	_setup_monitors_list()
 	_setup_graphics_and_fps()
 	_setup_garage_and_decor()
@@ -715,6 +720,120 @@ func _refresh_market_ui() -> void:
 
 		market_container.add_child(panel)
 
+func _setup_fleet_tab() -> void:
+	if fleet_container != null:
+		return
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.name = "Автопарк"
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	tab_container.add_child(margin)
+
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
+
+	fleet_container = VBoxContainer.new()
+	fleet_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fleet_container.add_theme_constant_override("separation", 10)
+	scroll.add_child(fleet_container)
+
+func _vehicle_role_title(role: String) -> String:
+	match role:
+		VehicleManager.ROLE_TRACTOR:
+			return "🚜 Тракторы"
+		VehicleManager.ROLE_TANKER:
+			return "💧 Поливочная техника"
+		VehicleManager.ROLE_HARVESTER:
+			return "🌾 Комбайны"
+		VehicleManager.ROLE_TRUCK:
+			return "🚚 Грузовики"
+	return role
+
+func _refresh_fleet_ui() -> void:
+	if fleet_container == null:
+		return
+
+	for child in fleet_container.get_children():
+		child.queue_free()
+
+	if not VehicleManager.initialized:
+		var loading: Label = Label.new()
+		loading.text = "🚜 Автопарк загружается..."
+		fleet_container.add_child(loading)
+		return
+
+	var title: Label = Label.new()
+	title.add_theme_font_size_override("font_size", 16)
+	title.text = "🚜 Garage 2.0 — активный автопарк"
+	fleet_container.add_child(title)
+
+	var summary: Label = Label.new()
+	summary.text = "Среднее состояние активной техники: %.0f%% | Всего машин: %d" % [
+		VehicleManager.get_average_active_condition(),
+		VehicleManager.vehicles.size()
+	]
+	fleet_container.add_child(summary)
+
+	for role in VehicleManager.ROLES:
+		var role_title: Label = Label.new()
+		role_title.add_theme_font_size_override("font_size", 15)
+		role_title.text = _vehicle_role_title(role)
+		fleet_container.add_child(role_title)
+
+		var vehicles_for_role: Array[Dictionary] = VehicleManager.get_owned_for_role(role)
+		for vehicle in vehicles_for_role:
+			var panel: PanelContainer = PanelContainer.new()
+			var row: HBoxContainer = HBoxContainer.new()
+			row.add_theme_constant_override("separation", 8)
+			panel.add_child(row)
+
+			var vehicle_id: String = str(vehicle.get("id", ""))
+			var model_id: String = str(vehicle.get("model_id", ""))
+			var active_model: String = VehicleManager.get_active_model_id(role)
+			var is_active: bool = model_id == active_model
+
+			var info: Label = Label.new()
+			info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			info.text = "%s%s | класс: %s | состояние %.0f%% | пробег %.1f км | скорость x%.2f | расход x%.2f | надёжность %.0f%%" % [
+				"✅ " if is_active else "",
+				str(vehicle.get("name", model_id)),
+				str(vehicle.get("class", "standard")),
+				float(vehicle.get("condition", 100.0)),
+				float(vehicle.get("mileage_km", 0.0)),
+				float(vehicle.get("speed_mult", 1.0)),
+				float(vehicle.get("fuel_mult", 1.0)),
+				float(vehicle.get("reliability", 0.85)) * 100.0
+			]
+			row.add_child(info)
+
+			var select_btn: Button = Button.new()
+			select_btn.text = "Активна" if is_active else "Выбрать"
+			select_btn.disabled = is_active
+			var rid: String = role
+			var vid: String = vehicle_id
+			select_btn.pressed.connect(func(target_role: String = rid, target_id: String = vid):
+				if VehicleManager.set_active_vehicle(target_role, target_id):
+					GameManager._sync_legacy_vehicle_state()
+					GameManager.save_to_settings()
+					_refresh_fleet_ui()
+					_update_ui()
+			)
+			row.add_child(select_btn)
+			fleet_container.add_child(panel)
+
+		var role_sep: HSeparator = HSeparator.new()
+		fleet_container.add_child(role_sep)
+
+	var note: Label = Label.new()
+	note.text = "Покупка улучшенных моделей остаётся во вкладке «Декор и Гараж». Здесь выбирается техника, которая реально выходит на поле."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	fleet_container.add_child(note)
+
 func _setup_repair_buttons() -> void:
 	var do_repair = func():
 		repair_requested.emit()
@@ -733,6 +852,7 @@ func _update_ui() -> void:
 	_refresh_contracts_ui()
 	_refresh_storage_ui()
 	_refresh_market_ui()
+	_refresh_fleet_ui()
 
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins
@@ -904,21 +1024,21 @@ func _update_ui() -> void:
 
 	# Модернизация автопарка (новая техника)
 	if btn_buy_heavy_tractor != null:
-		if GameManager.has_heavy_tractor:
+		if VehicleManager.owns_model("tractor_heavy"):
 			btn_buy_heavy_tractor.text = "Куплено ✔"
 			btn_buy_heavy_tractor.disabled = true
 		else:
 			_apply_feature_purchase_state(btn_buy_heavy_tractor, "heavy_tractor", "Купить (800 🪙)", 800)
 
 	if btn_buy_super_harvester != null:
-		if GameManager.has_super_harvester:
+		if VehicleManager.owns_model("harvester_super"):
 			btn_buy_super_harvester.text = "Куплено ✔"
 			btn_buy_super_harvester.disabled = true
 		else:
 			_apply_feature_purchase_state(btn_buy_super_harvester, "super_harvester", "Купить (1200 🪙)", 1200)
 
 	if btn_buy_road_train != null:
-		if GameManager.has_road_train:
+		if VehicleManager.owns_model("truck_road_train"):
 			btn_buy_road_train.text = "Куплено ✔"
 			btn_buy_road_train.disabled = true
 		else:
@@ -1105,24 +1225,27 @@ func _setup_garage_and_decor() -> void:
 	if btn_buy_heavy_tractor != null:
 		btn_buy_heavy_tractor.pressed.connect(func():
 			if ProgressionManager.can_access_feature("heavy_tractor") and GameManager.spend_coins(800):
-				GameManager.has_heavy_tractor = true
-				GameManager.save_to_settings()
+				if VehicleManager.purchase_model("tractor_heavy"):
+					GameManager._sync_legacy_vehicle_state()
+					GameManager.save_to_settings()
 				_update_ui()
 		)
 
 	if btn_buy_super_harvester != null:
 		btn_buy_super_harvester.pressed.connect(func():
 			if ProgressionManager.can_access_feature("super_harvester") and GameManager.spend_coins(1200):
-				GameManager.has_super_harvester = true
-				GameManager.save_to_settings()
+				if VehicleManager.purchase_model("harvester_super"):
+					GameManager._sync_legacy_vehicle_state()
+					GameManager.save_to_settings()
 				_update_ui()
 		)
 
 	if btn_buy_road_train != null:
 		btn_buy_road_train.pressed.connect(func():
 			if ProgressionManager.can_access_feature("road_train") and GameManager.spend_coins(950):
-				GameManager.has_road_train = true
-				GameManager.save_to_settings()
+				if VehicleManager.purchase_model("truck_road_train"):
+					GameManager._sync_legacy_vehicle_state()
+					GameManager.save_to_settings()
 				_update_ui()
 		)
 
