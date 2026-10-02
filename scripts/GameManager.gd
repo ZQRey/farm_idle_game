@@ -6,6 +6,7 @@ const WindowManager = preload("res://scripts/WindowManager.gd")
 const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const MarketManager = preload("res://scripts/MarketManager.gd")
 const VehicleManager = preload("res://scripts/VehicleManager.gd")
+const WorkerManager = preload("res://scripts/WorkerManager.gd")
 
 signal bankruptcy_declared
 signal season_changed(new_season: Season, season_name: String)
@@ -236,6 +237,7 @@ static func init_from_settings() -> void:
 	harvester_condition = float(SettingsManager.config.get_value("durability", "harvester_condition", 100.0))
 	truck_condition = float(SettingsManager.config.get_value("durability", "truck_condition", 100.0))
 
+	WorkerManager.init_from_settings()
 	VehicleManager.init_from_settings(
 		{
 			"heavy_tractor": has_heavy_tractor,
@@ -319,6 +321,7 @@ static func save_to_settings() -> void:
 	SettingsManager.config.set_value("game", "has_super_harvester", has_super_harvester)
 	SettingsManager.config.set_value("game", "has_road_train", has_road_train)
 	VehicleManager.write_to_config()
+	WorkerManager.write_to_config()
 
 	SettingsManager.config.set_value("mechanics", "fuel_level", fuel_level)
 	SettingsManager.config.set_value("mechanics", "auto_refuel", auto_refuel)
@@ -579,7 +582,7 @@ static func process_production_costs() -> Dictionary:
 	var salary_payment: int = 0
 	var fuel_payment: int = 0
 
-	var base_salary: int = 14 + (0 if has_seeder_tractor else 12) + (greenhouse_count * 8)
+	var base_salary: int = WorkerManager.get_total_salary_per_cycle() + (greenhouse_count * 8)
 	# Зарплата является обязательным операционным расходом. При хранении урожая
 	# казна может временно уйти в минус до последующей продажи запасов.
 	salary_payment = base_salary
@@ -683,6 +686,8 @@ static func declare_bankruptcy() -> void:
 
 	is_volunteers_active = false
 	volunteer_timer = 0.0
+	if WorkerManager.initialized:
+		WorkerManager.reset_to_defaults()
 
 	# Блокировка платных культур
 	for cid in CROPS:
