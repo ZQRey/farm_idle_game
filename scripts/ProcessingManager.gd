@@ -6,6 +6,7 @@ const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const LivestockManager = preload("res://scripts/LivestockManager.gd")
 const GameManager = preload("res://scripts/GameManager.gd")
 const SpecializationManager = preload("res://scripts/SpecializationManager.gd")
+const PrestigeManager = preload("res://scripts/PrestigeManager.gd")
 
 const TICK_SECONDS: int = 300
 const MAX_LEVEL: int = 3
@@ -192,7 +193,12 @@ static func sell_all_products() -> int:
 		if amount <= 0.0:
 			continue
 		var info: Dictionary = PRODUCTS[product_id]
-		gross += int(round(amount * float(info.get("price", 0)) * SpecializationManager.get_processing_sale_multiplier()))
+		gross += int(round(
+			amount
+			* float(info.get("price", 0))
+			* SpecializationManager.get_processing_sale_multiplier()
+			* PrestigeManager.get_sale_multiplier()
+		))
 	if gross <= 0:
 		return 0
 

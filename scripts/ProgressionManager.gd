@@ -166,6 +166,12 @@ static func get_reputation_title() -> String:
 		return "Перспективная ферма"
 	return "Начинающий фермер"
 
+static func reset_for_prestige() -> void:
+	farm_level = 1
+	xp = 0
+	reputation = 0
+	save_to_settings()
+
 static func get_next_unlock_text() -> String:
 	var candidates: Array[Dictionary] = [
 		{"level": 2, "text": "Пугало"},

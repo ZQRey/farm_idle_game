@@ -11,6 +11,7 @@ const QualityManager = preload("res://scripts/QualityManager.gd")
 const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const ContractManager = preload("res://scripts/ContractManager.gd")
 const SpecializationManager = preload("res://scripts/SpecializationManager.gd")
+const PrestigeManager = preload("res://scripts/PrestigeManager.gd")
 
 const MAX_OFFLINE_SECONDS: int = 8 * 60 * 60
 const OFFLINE_EFFICIENCY: float = 0.65
@@ -55,7 +56,7 @@ static func init_and_apply() -> Dictionary:
 static func calculate_offline_window(previous_timestamp: int, current_timestamp: int) -> Dictionary:
 	var raw_seconds: int = max(0, current_timestamp - max(0, previous_timestamp))
 	var credited_seconds: int = min(raw_seconds, MAX_OFFLINE_SECONDS)
-	var effective_seconds: float = float(credited_seconds) * OFFLINE_EFFICIENCY
+	var effective_seconds: float = float(credited_seconds) * get_effective_efficiency()
 	var possible_cycles: int = int(floor(effective_seconds / NOMINAL_CYCLE_SECONDS))
 	return {
 		"raw_seconds": raw_seconds,
@@ -86,8 +87,11 @@ static func mark_active_now() -> void:
 static func get_last_report() -> Dictionary:
 	return last_report.duplicate(true)
 
+static func get_effective_efficiency() -> float:
+	return min(0.85, OFFLINE_EFFICIENCY + PrestigeManager.get_offline_efficiency_bonus())
+
 static func get_efficiency_percent() -> int:
-	return int(round(OFFLINE_EFFICIENCY * 100.0))
+	return int(round(get_effective_efficiency() * 100.0))
 
 static func get_max_offline_hours() -> int:
 	return int(MAX_OFFLINE_SECONDS / 3600)
@@ -140,6 +144,7 @@ static func _simulate_offline_window(window: Dictionary) -> Dictionary:
 		harvest_kg *= WorkerManager.get_yield_multiplier()
 		harvest_kg *= BuildingManager.get_yield_multiplier()
 		harvest_kg *= SpecializationManager.get_crop_yield_multiplier()
+		harvest_kg *= PrestigeManager.get_yield_multiplier()
 
 		QualityManager.register_harvest(crop_id, OFFLINE_QUALITY_GRADE, harvest_kg)
 		var deposit: Dictionary = InventoryManager.deposit_crop(crop_id, harvest_kg, OFFLINE_QUALITY_GRADE)

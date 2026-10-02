@@ -9,6 +9,7 @@ const QualityManager = preload("res://scripts/QualityManager.gd")
 const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const ContractManager = preload("res://scripts/ContractManager.gd")
 const SpecializationManager = preload("res://scripts/SpecializationManager.gd")
+const PrestigeManager = preload("res://scripts/PrestigeManager.gd")
 
 const AUX_FIELD_IDS: Array[String] = ["field_2", "field_3"]
 const MAX_LEVEL: int = 3
@@ -216,6 +217,7 @@ static func _complete_cycle(field_id: String, field: Dictionary) -> Dictionary:
 	harvest_kg *= get_yield_multiplier(field_id)
 	harvest_kg *= BuildingManager.get_yield_multiplier()
 	harvest_kg *= SpecializationManager.get_crop_yield_multiplier()
+	harvest_kg *= PrestigeManager.get_yield_multiplier()
 	QualityManager.register_harvest(crop_id, FIELD_QUALITY_GRADE, harvest_kg)
 
 	var deposit: Dictionary = InventoryManager.deposit_crop(crop_id, harvest_kg, FIELD_QUALITY_GRADE)

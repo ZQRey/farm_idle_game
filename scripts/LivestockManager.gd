@@ -5,6 +5,7 @@ const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const GameManager = preload("res://scripts/GameManager.gd")
 const SpecializationManager = preload("res://scripts/SpecializationManager.gd")
+const PrestigeManager = preload("res://scripts/PrestigeManager.gd")
 
 const TICK_SECONDS: int = 300
 const MAX_BUILDING_LEVEL: int = 3
@@ -173,7 +174,7 @@ static func consume_milk(amount_l: float) -> bool:
 	return true
 
 static func sell_all_products() -> int:
-	var gross: int = int(round(eggs * EGG_PRICE + milk_l * MILK_PRICE))
+	var gross: int = int(round((eggs * EGG_PRICE + milk_l * MILK_PRICE) * PrestigeManager.get_sale_multiplier()))
 	if gross <= 0:
 		return 0
 	eggs = 0.0
