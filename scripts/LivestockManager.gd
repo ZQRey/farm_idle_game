@@ -4,6 +4,7 @@ extends RefCounted
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const GameManager = preload("res://scripts/GameManager.gd")
+const SpecializationManager = preload("res://scripts/SpecializationManager.gd")
 
 const TICK_SECONDS: int = 300
 const MAX_BUILDING_LEVEL: int = 3
@@ -120,13 +121,15 @@ static func buy_cow() -> bool:
 	return true
 
 static func can_feed_chickens() -> bool:
-	var wheat_needed: float = CHICKEN_WHEAT_KG * float(chickens)
-	var corn_needed: float = CHICKEN_CORN_KG * float(chickens)
+	var feed_mult: float = SpecializationManager.get_livestock_feed_multiplier()
+	var wheat_needed: float = CHICKEN_WHEAT_KG * float(chickens) * feed_mult
+	var corn_needed: float = CHICKEN_CORN_KG * float(chickens) * feed_mult
 	return chickens > 0 and InventoryManager.get_stock("wheat") >= wheat_needed and InventoryManager.get_stock("corn") >= corn_needed
 
 static func can_feed_cows() -> bool:
-	var wheat_needed: float = COW_WHEAT_KG * float(cows)
-	var corn_needed: float = COW_CORN_KG * float(cows)
+	var feed_mult: float = SpecializationManager.get_livestock_feed_multiplier()
+	var wheat_needed: float = COW_WHEAT_KG * float(cows) * feed_mult
+	var corn_needed: float = COW_CORN_KG * float(cows) * feed_mult
 	return cows > 0 and InventoryManager.get_stock("wheat") >= wheat_needed and InventoryManager.get_stock("corn") >= corn_needed
 
 static func process_due_ticks(max_ticks: int = 12) -> Dictionary:
@@ -206,17 +209,19 @@ static func _process_single_tick() -> Dictionary:
 	var cow_fed: int = 0
 
 	if can_feed_chickens():
-		InventoryManager.remove_crop("wheat", CHICKEN_WHEAT_KG * chickens)
-		InventoryManager.remove_crop("corn", CHICKEN_CORN_KG * chickens)
-		produced_eggs = EGGS_PER_CHICKEN * chickens
+		var chicken_feed_mult: float = SpecializationManager.get_livestock_feed_multiplier()
+		InventoryManager.remove_crop("wheat", CHICKEN_WHEAT_KG * chickens * chicken_feed_mult)
+		InventoryManager.remove_crop("corn", CHICKEN_CORN_KG * chickens * chicken_feed_mult)
+		produced_eggs = EGGS_PER_CHICKEN * chickens * SpecializationManager.get_livestock_output_multiplier()
 		eggs += produced_eggs
 		total_eggs_produced += produced_eggs
 		chicken_fed = chickens
 
 	if can_feed_cows():
-		InventoryManager.remove_crop("wheat", COW_WHEAT_KG * cows)
-		InventoryManager.remove_crop("corn", COW_CORN_KG * cows)
-		produced_milk = MILK_L_PER_COW * cows
+		var cow_feed_mult: float = SpecializationManager.get_livestock_feed_multiplier()
+		InventoryManager.remove_crop("wheat", COW_WHEAT_KG * cows * cow_feed_mult)
+		InventoryManager.remove_crop("corn", COW_CORN_KG * cows * cow_feed_mult)
+		produced_milk = MILK_L_PER_COW * cows * SpecializationManager.get_livestock_output_multiplier()
 		milk_l += produced_milk
 		total_milk_produced += produced_milk
 		cow_fed = cows
