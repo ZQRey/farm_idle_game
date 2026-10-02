@@ -7,6 +7,7 @@ const ContractManager = preload("res://scripts/ContractManager.gd")
 const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const VehicleManager = preload("res://scripts/VehicleManager.gd")
 const WorkerManager = preload("res://scripts/WorkerManager.gd")
+const BuildingManager = preload("res://scripts/BuildingManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const AssetGenerator = preload("res://tools/AssetGenerator.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
@@ -880,7 +881,7 @@ func _start_growing() -> void:
 	state_timer = 0.0
 
 func _process_growing(delta: float) -> void:
-	var growth_rate: float = (1.30 if current_weather_id == 1 else weather_speed_mod) * WorkerManager.get_phase_speed_multiplier("growing")
+	var growth_rate: float = (1.30 if current_weather_id == 1 else weather_speed_mod) * WorkerManager.get_phase_speed_multiplier("growing") * BuildingManager.get_growth_multiplier()
 	state_timer += delta * growth_rate
 	var crop_data: Dictionary = GameManager.get_current_crop_data()
 	var total_time: float = float(crop_data.get("growth_time", 8.0))
@@ -974,6 +975,7 @@ func _finish_hauling_cycle() -> void:
 	var harvest_kg: float = InventoryManager.calculate_harvest_kg(mon_mult, false)
 	harvest_kg *= VehicleManager.get_capacity_multiplier(VehicleManager.ROLE_HARVESTER)
 	harvest_kg *= WorkerManager.get_yield_multiplier()
+	harvest_kg *= BuildingManager.get_yield_multiplier()
 	var deposit: Dictionary = InventoryManager.deposit_crop(crop_id, harvest_kg)
 	var stored_kg: float = float(deposit.get("stored_kg", 0.0))
 	var overflow_kg: float = float(deposit.get("overflow_kg", 0.0))
