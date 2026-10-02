@@ -966,7 +966,7 @@ func _init() -> void:
 	var old_contract_offers: Array = ContractManager.offers.duplicate(true)
 	var old_contract_active: Array = ContractManager.active_contracts.duplicate(true)
 	var old_contract_completed: int = ContractManager.total_completed
-	var old_contract_coins: int = ContractManager.total_contract_coins
+	var old_fields_contract_coins: int = ContractManager.total_contract_coins
 
 	MultiFieldManager.initialized = true
 	MultiFieldManager.fields = {
@@ -1050,7 +1050,7 @@ func _init() -> void:
 	ContractManager.offers = old_contract_offers
 	ContractManager.active_contracts = old_contract_active
 	ContractManager.total_completed = old_contract_completed
-	ContractManager.total_contract_coins = old_contract_coins
+	ContractManager.total_contract_coins = old_fields_contract_coins
 	InventoryManager.save_to_settings()
 	QualityManager.save_to_settings()
 	ProgressionManager.save_to_settings()
