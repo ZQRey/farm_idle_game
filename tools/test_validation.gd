@@ -8,6 +8,7 @@ const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const ContractManager = preload("res://scripts/ContractManager.gd")
 const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const MarketManager = preload("res://scripts/MarketManager.gd")
+const VehicleManager = preload("res://scripts/VehicleManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 
@@ -335,6 +336,54 @@ func _init() -> void:
 	MarketManager.last_tick_at = old_last_tick
 	MarketManager.next_tick_at = old_next_tick
 	MarketManager.save_to_settings()
+
+	# 10. Тест: Garage 2.0 — экземпляры, выбор активной техники, пробег и persistence
+	print("\n[ТЕСТ 10] Проверка Garage 2.0:")
+	var old_vehicles: Dictionary = VehicleManager.vehicles.duplicate(true)
+	var old_active_fleet: Dictionary = VehicleManager.active_by_role.duplicate(true)
+	var old_next_vehicle_id: int = VehicleManager.next_vehicle_id
+
+	VehicleManager.vehicles = {}
+	VehicleManager.active_by_role = {}
+	VehicleManager.next_vehicle_id = 1
+	VehicleManager.initialized = true
+	VehicleManager.reset_to_defaults()
+
+	assert(VehicleManager.vehicles.size() == 4, "Стартовый гараж должен содержать 4 машины")
+	assert(VehicleManager.get_active_model_id(VehicleManager.ROLE_TRACTOR) == "tractor_basic", "Стартовый активный трактор должен быть МТЗ-82")
+	assert(not VehicleManager.owns_model("tractor_heavy"), "Кировец не должен принадлежать новому гаражу")
+
+	assert(VehicleManager.purchase_model("tractor_heavy"), "Кировец должен добавляться как отдельный экземпляр")
+	assert(VehicleManager.owns_model("tractor_heavy"), "После покупки Кировец должен находиться в гараже")
+	assert(VehicleManager.get_active_model_id(VehicleManager.ROLE_TRACTOR) == "tractor_heavy", "Новая улучшенная модель должна становиться активной")
+
+	assert(VehicleManager.set_active_model(VehicleManager.ROLE_TRACTOR, "tractor_basic"), "Должна быть возможность вернуть МТЗ активным")
+	assert(is_equal_approx(VehicleManager.get_speed_multiplier(VehicleManager.ROLE_TRACTOR), 1.0), "МТЗ должен иметь скорость x1.0")
+
+	VehicleManager.set_active_model(VehicleManager.ROLE_TRACTOR, "tractor_heavy")
+	var before_mileage: float = VehicleManager.get_active_mileage(VehicleManager.ROLE_TRACTOR)
+	var before_condition: float = VehicleManager.get_active_condition(VehicleManager.ROLE_TRACTOR)
+	VehicleManager.add_cycle_usage(VehicleManager.ROLE_TRACTOR, 4.0, 2.5)
+	assert(VehicleManager.get_active_mileage(VehicleManager.ROLE_TRACTOR) > before_mileage, "Пробег активной машины должен расти")
+	assert(VehicleManager.get_active_condition(VehicleManager.ROLE_TRACTOR) < before_condition, "Состояние активной машины должно ухудшаться")
+
+	VehicleManager.save_to_settings()
+	VehicleManager.vehicles = {}
+	VehicleManager.active_by_role = {}
+	VehicleManager.init_from_settings()
+	assert(VehicleManager.owns_model("tractor_heavy"), "Кировец должен восстановиться после загрузки")
+	assert(VehicleManager.get_active_model_id(VehicleManager.ROLE_TRACTOR) == "tractor_heavy", "Активная модель должна восстановиться")
+	assert(VehicleManager.get_active_mileage(VehicleManager.ROLE_TRACTOR) >= 4.0, "Пробег должен сохраняться")
+	print("  ✔ ТЕСТ 10 УСПЕШНО ПРОЙДЕН!")
+
+	# Возвращаем автопарк пользователя.
+	VehicleManager.vehicles = old_vehicles
+	VehicleManager.active_by_role = old_active_fleet
+	VehicleManager.next_vehicle_id = old_next_vehicle_id
+	VehicleManager.initialized = true
+	VehicleManager.save_to_settings()
+	GameManager._sync_legacy_vehicle_state()
+	GameManager.save_to_settings()
 
 	print("\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ! СИСТЕМА ПОЛНОСТЬЮ ИСПРАВНА!")
 	quit(0)
