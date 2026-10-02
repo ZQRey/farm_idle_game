@@ -348,8 +348,7 @@ static func spend_coins(amount: int) -> bool:
 static func get_current_crop_data() -> Dictionary:
 	return CROPS.get(current_crop, CROPS["wheat"])
 
-## Фиксированная базовая цена склада для v0.4.
-## Динамические рыночные колебания будут добавлены отдельным MarketManager в v0.5.
+## Текущая цена продажи со склада: базовая стоимость × инфраструктура × сезон × рынок.
 static func calculate_crop_sale_value(crop_id: String, amount_kg: float) -> int:
 	if amount_kg <= 0.0:
 		return 0
