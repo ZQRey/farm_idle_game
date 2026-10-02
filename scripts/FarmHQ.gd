@@ -595,7 +595,7 @@ func _history_price_text(crop_id: String) -> String:
 		else:
 			var idx_value: int = int(round(float(entry.get("effective_multiplier", 1.0)) * 100.0))
 			parts.append("%d%%" % idx_value)
-	return " → ".join(parts)
+	return " → ".join(PackedStringArray(parts))
 
 func _refresh_market_ui() -> void:
 	if market_container == null:
