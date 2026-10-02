@@ -12,6 +12,7 @@ const BuildingManager = preload("res://scripts/BuildingManager.gd")
 const QualityManager = preload("res://scripts/QualityManager.gd")
 const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
 const AchievementManager = preload("res://scripts/AchievementManager.gd")
+const OfflineProgressManager = preload("res://scripts/OfflineProgressManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 
@@ -64,6 +65,9 @@ var positive_events_container: VBoxContainer
 
 # Достижения (динамическая вкладка)
 var achievements_container: VBoxContainer
+
+# Offline progress (динамическая вкладка)
+var offline_container: VBoxContainer
 
 # Магазин семян
 @onready var seed_container: VBoxContainer = $VBox/TabContainer/Магазин/ScrollSeeds/VBoxSeeds
@@ -162,6 +166,7 @@ func _ready() -> void:
 	_setup_buildings_tab()
 	_setup_positive_events_tab()
 	_setup_achievements_tab()
+	_setup_offline_tab()
 	_setup_monitors_list()
 	_setup_graphics_and_fps()
 	_setup_garage_and_decor()
@@ -1398,6 +1403,109 @@ func _refresh_achievements_ui() -> void:
 
 		achievements_container.add_child(panel)
 
+func _setup_offline_tab() -> void:
+	if offline_container != null:
+		return
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.name = "Офлайн"
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	tab_container.add_child(margin)
+
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
+
+	offline_container = VBoxContainer.new()
+	offline_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	offline_container.add_theme_constant_override("separation", 10)
+	scroll.add_child(offline_container)
+
+func _format_offline_duration(seconds: int) -> String:
+	var safe: int = max(0, seconds)
+	var hours: int = safe / 3600
+	var minutes: int = (safe % 3600) / 60
+	if hours > 0:
+		return "%d ч %02d мин" % [hours, minutes]
+	return "%d мин" % minutes
+
+func _refresh_offline_ui() -> void:
+	if offline_container == null:
+		return
+
+	for child in offline_container.get_children():
+		child.queue_free()
+
+	var title: Label = Label.new()
+	title.add_theme_font_size_override("font_size", 16)
+	title.text = "🌙 Offline progress"
+	offline_container.add_child(title)
+
+	var rules: Label = Label.new()
+	rules.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	rules.text = "До %d часов отсутствия засчитываются с эффективностью %d%%. Один офлайн-цикл = %.0f минут. Офлайн не генерирует редкие события и использует нейтральное качество B." % [
+		OfflineProgressManager.get_max_offline_hours(),
+		OfflineProgressManager.get_efficiency_percent(),
+		OfflineProgressManager.NOMINAL_CYCLE_SECONDS / 60.0
+	]
+	offline_container.add_child(rules)
+
+	var lifetime: Label = Label.new()
+	lifetime.text = "Всего зачтено офлайн: %s | циклов: %d" % [
+		_format_offline_duration(OfflineProgressManager.lifetime_offline_seconds),
+		OfflineProgressManager.lifetime_offline_cycles
+	]
+	offline_container.add_child(lifetime)
+
+	var report: Dictionary = OfflineProgressManager.get_last_report()
+	var cycles: int = int(report.get("cycles_completed", 0))
+	var credited: int = int(report.get("credited_seconds", 0))
+	if credited <= 0:
+		var none: Label = Label.new()
+		none.text = "Последний запуск: офлайн-прогресс не начислялся."
+		offline_container.add_child(none)
+		return
+
+	var panel: PanelContainer = PanelContainer.new()
+	var box: VBoxContainer = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 5)
+	panel.add_child(box)
+
+	var summary: Label = Label.new()
+	summary.text = "Последнее отсутствие: %s%s | эффективных циклов: %d" % [
+		_format_offline_duration(credited),
+		" (лимит применён)" if bool(report.get("was_capped", false)) else "",
+		cycles
+	]
+	box.add_child(summary)
+
+	var crop_id: String = str(report.get("crop_id", "wheat"))
+	var crop_data: Dictionary = GameManager.CROPS.get(crop_id, {})
+	var details: Label = Label.new()
+	details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	details.text = "%s | собрано %.0f кг | на склад %.0f кг | продано %.0f кг | валовая выручка %d 🪙 | расходы %d 🪙 | итог %+d 🪙" % [
+		str(crop_data.get("name", crop_id)),
+		float(report.get("harvested_kg", 0.0)),
+		float(report.get("stored_kg", 0.0)),
+		float(report.get("sold_kg", 0.0)),
+		int(report.get("gross_coins", 0)),
+		int(report.get("operating_costs", 0)),
+		int(report.get("net_coins", 0))
+	]
+	box.add_child(details)
+
+	if bool(report.get("stopped_for_fuel", false)):
+		var warning: Label = Label.new()
+		warning.text = "⛽ Симуляция остановилась раньше из-за нехватки топлива/средств на заправку."
+		warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(warning)
+
+	offline_container.add_child(panel)
+
 func _setup_repair_buttons() -> void:
 	var do_repair = func():
 		repair_requested.emit()
@@ -1421,6 +1529,7 @@ func _update_ui() -> void:
 	_refresh_buildings_ui()
 	_refresh_positive_events_ui()
 	_refresh_achievements_ui()
+	_refresh_offline_ui()
 
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins
