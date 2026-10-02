@@ -660,7 +660,7 @@ func _start_plowing() -> void:
 	particles_soil.emitting = true
 
 func _process_plowing(delta: float, speed: float) -> void:
-	var plowing_speed: float = speed * (1.6 if _uses_heavy_tractor() else 1.0)
+	var plowing_speed: float = speed * VehicleManager.get_speed_multiplier(VehicleManager.ROLE_TRACTOR)
 	vehicle_x += plowing_speed * delta
 	var spr_y: float = GROUND_Y - 40.0 if _uses_heavy_tractor() else GROUND_Y - 32.0
 	vehicle_sprite.position = Vector2(vehicle_x, spr_y)
@@ -852,7 +852,7 @@ func _start_watering() -> void:
 	particles_water.emitting = true
 
 func _process_watering(delta: float, speed: float) -> void:
-	vehicle_x += speed * delta
+	vehicle_x += speed * VehicleManager.get_speed_multiplier(VehicleManager.ROLE_TANKER) * delta
 	vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
 	particles_water.position = Vector2(vehicle_x + 4.0, GROUND_Y - 12.0)
 
@@ -907,7 +907,7 @@ func _start_harvesting() -> void:
 	vehicle_sprite.modulate = Color.WHITE
 
 func _process_harvesting(delta: float, speed: float) -> void:
-	var harv_speed: float = speed * (1.6 if _uses_super_harvester() else 0.9)
+	var harv_speed: float = speed * VehicleManager.get_speed_multiplier(VehicleManager.ROLE_HARVESTER)
 	vehicle_x += harv_speed * delta
 	var spr_y: float = GROUND_Y - 48.0 if _uses_super_harvester() else GROUND_Y - 40.0
 	vehicle_sprite.position = Vector2(vehicle_x, spr_y)
@@ -947,7 +947,7 @@ func _start_hauling() -> void:
 	truck_fill_stage = 0
 
 func _process_hauling(delta: float, speed: float) -> void:
-	var haul_speed: float = speed * (1.9 if _uses_road_train() else 1.1)
+	var haul_speed: float = speed * VehicleManager.get_speed_multiplier(VehicleManager.ROLE_TRUCK)
 	vehicle_x += haul_speed * delta
 	var spr_y: float = GROUND_Y - 40.0 if _uses_road_train() else GROUND_Y - 32.0
 	vehicle_sprite.position = Vector2(vehicle_x, spr_y)
