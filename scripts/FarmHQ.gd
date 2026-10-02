@@ -8,6 +8,7 @@ const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const MarketManager = preload("res://scripts/MarketManager.gd")
 const VehicleManager = preload("res://scripts/VehicleManager.gd")
 const WorkerManager = preload("res://scripts/WorkerManager.gd")
+const BuildingManager = preload("res://scripts/BuildingManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 
@@ -51,6 +52,9 @@ var fleet_container: VBoxContainer
 
 # Работники (динамическая вкладка)
 var workers_container: VBoxContainer
+
+# Инфраструктура (динамическая вкладка)
+var buildings_container: VBoxContainer
 
 # Магазин семян
 @onready var seed_container: VBoxContainer = $VBox/TabContainer/Магазин/ScrollSeeds/VBoxSeeds
@@ -146,6 +150,7 @@ func _ready() -> void:
 	_setup_market_tab()
 	_setup_fleet_tab()
 	_setup_workers_tab()
+	_setup_buildings_tab()
 	_setup_monitors_list()
 	_setup_graphics_and_fps()
 	_setup_garage_and_decor()
@@ -1044,6 +1049,111 @@ func _refresh_workers_ui() -> void:
 		hire_row.add_child(hire_btn)
 		workers_container.add_child(hire_row)
 
+func _setup_buildings_tab() -> void:
+	if buildings_container != null:
+		return
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.name = "Инфраструктура"
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	tab_container.add_child(margin)
+
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
+
+	buildings_container = VBoxContainer.new()
+	buildings_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	buildings_container.add_theme_constant_override("separation", 10)
+	scroll.add_child(buildings_container)
+
+func _refresh_buildings_ui() -> void:
+	if buildings_container == null:
+		return
+
+	for child in buildings_container.get_children():
+		child.queue_free()
+
+	if not BuildingManager.initialized:
+		var loading: Label = Label.new()
+		loading.text = "🏗 Инфраструктура загружается..."
+		buildings_container.add_child(loading)
+		return
+
+	var title: Label = Label.new()
+	title.add_theme_font_size_override("font_size", 16)
+	title.text = "🏗 Инфраструктура фермы"
+	buildings_container.add_child(title)
+
+	var summary: Label = Label.new()
+	summary.text = "Инвестировано: %d 🪙 | Доп. склад: +%.0f кг | Бак: %.0f л | Цена продажи: x%.2f" % [
+		BuildingManager.total_invested,
+		BuildingManager.get_storage_bonus_kg(),
+		GameManager.max_fuel,
+		BuildingManager.get_sale_multiplier()
+	]
+	buildings_container.add_child(summary)
+
+	var effects: Label = Label.new()
+	effects.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	effects.text = "ТО x%.2f | износ x%.2f | топливо x%.2f | рост x%.2f | урожай x%.2f | надёжность +%.1f%%" % [
+		BuildingManager.get_repair_cost_multiplier(),
+		BuildingManager.get_wear_multiplier(),
+		BuildingManager.get_fuel_price_multiplier(),
+		BuildingManager.get_growth_multiplier(),
+		BuildingManager.get_yield_multiplier(),
+		BuildingManager.get_reliability_bonus() * 100.0
+	]
+	buildings_container.add_child(effects)
+
+	for building_id in BuildingManager.BUILDING_ORDER:
+		var info: Dictionary = BuildingManager.BUILDINGS[building_id]
+		var level: int = BuildingManager.get_level(building_id)
+		var panel: PanelContainer = PanelContainer.new()
+		var row: HBoxContainer = HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		panel.add_child(row)
+
+		var label: Label = Label.new()
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.text = "%s %s — ур. %d/%d\n%s" % [
+			str(info.get("icon", "🏗")),
+			str(info.get("name", building_id)),
+			level,
+			BuildingManager.MAX_LEVEL,
+			str(info.get("description", ""))
+		]
+		row.add_child(label)
+
+		var btn: Button = Button.new()
+		var requires_barn: bool = building_id == "barn_upgrade" and not GameManager.has_barn
+		if requires_barn:
+			btn.text = "Нужен амбар"
+			btn.disabled = true
+		elif level >= BuildingManager.MAX_LEVEL:
+			btn.text = "MAX ✔"
+			btn.disabled = true
+		else:
+			var cost: int = BuildingManager.get_upgrade_cost(building_id)
+			btn.text = "Построить / улучшить (%d 🪙)" % cost
+			btn.disabled = GameManager.coins < cost
+			var bid: String = building_id
+			btn.pressed.connect(func(target_id: String = bid):
+				var current_cost: int = BuildingManager.get_upgrade_cost(target_id)
+				if current_cost > 0 and GameManager.spend_coins(current_cost):
+					if BuildingManager.upgrade(target_id):
+						GameManager.refresh_infrastructure_effects()
+						GameManager.save_to_settings()
+						_update_ui()
+			)
+		row.add_child(btn)
+		buildings_container.add_child(panel)
+
 func _setup_repair_buttons() -> void:
 	var do_repair = func():
 		repair_requested.emit()
@@ -1064,6 +1174,7 @@ func _update_ui() -> void:
 	_refresh_market_ui()
 	_refresh_fleet_ui()
 	_refresh_workers_ui()
+	_refresh_buildings_ui()
 
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins
@@ -1259,10 +1370,13 @@ func _update_ui() -> void:
 	if lbl_fuel_level != null:
 		lbl_fuel_level.text = "Уровень топлива: %.1f / %.0f л" % [GameManager.fuel_level, GameManager.max_fuel]
 	if btn_refuel_20 != null:
-		btn_refuel_20.disabled = (GameManager.fuel_level >= GameManager.max_fuel) or (GameManager.coins < 25)
+		var partial_amount: float = min(20.0, max(0.0, GameManager.max_fuel - GameManager.fuel_level))
+		var partial_cost: int = GameManager.calculate_refuel_cost(partial_amount)
+		btn_refuel_20.text = "Заправить %.0f л (%d 🪙)" % [partial_amount, partial_cost] if partial_amount > 0.5 else "Бак полон ✔"
+		btn_refuel_20.disabled = (partial_amount <= 0.5) or (GameManager.coins < partial_cost)
 	if btn_refuel_full != null:
 		var needed: float = GameManager.max_fuel - GameManager.fuel_level
-		var full_cost: int = int(ceil(needed * 1.1))
+		var full_cost: int = GameManager.calculate_refuel_cost(needed)
 		btn_refuel_full.text = "Полный бак (%d 🪙)" % full_cost if needed > 0.5 else "Бак полон ✔"
 		btn_refuel_full.disabled = (needed <= 0.5) or (GameManager.coins < full_cost)
 	if check_auto_refuel != null:
@@ -1308,15 +1422,17 @@ func _update_ui() -> void:
 		var avg_mach: float = GameManager.get_machinery_average_condition()
 		var cond_warn: String = " (Требует ТО!)" if avg_mach < 40.0 else " ✔"
 		lbl_machinery_cond.text = "Состояние автопарка: %.0f%%%s" % [avg_mach, cond_warn]
-		btn_repair_machinery.text = "ТО автопарка (40 🪙)" if avg_mach < 99.0 else "Техника в идеале ✔"
-		btn_repair_machinery.disabled = (avg_mach >= 99.0) or (GameManager.coins < 40)
+		var machinery_repair_cost: int = GameManager.get_machinery_repair_cost()
+		btn_repair_machinery.text = "ТО автопарка (%d 🪙)" % machinery_repair_cost if avg_mach < 99.0 else "Техника в идеале ✔"
+		btn_repair_machinery.disabled = (avg_mach >= 99.0) or (GameManager.coins < machinery_repair_cost)
 
 	if lbl_buildings_cond != null and btn_repair_buildings != null:
 		var avg_build: float = (GameManager.windmill_condition + GameManager.barn_condition + GameManager.canopy_condition + GameManager.greenhouse_condition) / 4.0
 		var build_warn: String = " (Требует капремонта!)" if avg_build < 40.0 else " ✔"
 		lbl_buildings_cond.text = "Состояние построек: %.0f%%%s" % [avg_build, build_warn]
-		btn_repair_buildings.text = "Капремонт зданий (35 🪙)" if avg_build < 99.0 else "Здания в идеале ✔"
-		btn_repair_buildings.disabled = (avg_build >= 99.0) or (GameManager.coins < 35)
+		var building_repair_cost: int = GameManager.get_building_repair_cost()
+		btn_repair_buildings.text = "Капремонт зданий (%d 🪙)" % building_repair_cost if avg_build < 99.0 else "Здания в идеале ✔"
+		btn_repair_buildings.disabled = (avg_build >= 99.0) or (GameManager.coins < building_repair_cost)
 
 func _refresh_seeds_ui() -> void:
 	if seed_container == null:
@@ -1626,14 +1742,14 @@ func _setup_production_tab() -> void:
 	# Топливо
 	if btn_refuel_20 != null:
 		btn_refuel_20.pressed.connect(func():
-			if GameManager.refuel(20.0, 25):
+			var amount: float = min(20.0, max(0.0, GameManager.max_fuel - GameManager.fuel_level))
+			if amount > 0.0 and GameManager.refuel(amount):
 				_update_ui()
 		)
 	if btn_refuel_full != null:
 		btn_refuel_full.pressed.connect(func():
 			var needed: float = GameManager.max_fuel - GameManager.fuel_level
-			var cost: int = int(ceil(needed * 1.1))
-			if GameManager.refuel(needed, cost):
+			if needed > 0.0 and GameManager.refuel(needed):
 				_update_ui()
 		)
 	if check_auto_refuel != null:
