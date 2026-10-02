@@ -689,6 +689,8 @@ func _init() -> void:
 	ContractManager.save_to_settings()
 	QualityManager.save_to_settings()
 	PositiveEventManager.save_to_settings()
+	assert(int(SettingsManager.config.get_value("statistics", "total_harvested", -1)) == ach_old_harvests, "Lifetime-статистика урожаев должна persistиться")
+	assert(int(SettingsManager.config.get_value("statistics", "total_coins_earned", -1)) == ach_old_coins, "Lifetime-статистика монет должна persistиться")
 
 	print("\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ! СИСТЕМА ПОЛНОСТЬЮ ИСПРАВНА!")
 	quit(0)
