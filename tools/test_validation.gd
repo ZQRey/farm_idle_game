@@ -1246,5 +1246,34 @@ func _init() -> void:
 	assert(gh_times[3] <= 14.0 * 60.0, "Максимальный greenhouse cycle должен оставаться в разумном idle-диапазоне")
 	print("  ✔ ТЕСТ 24 УСПЕШНО ПРОЙДЕН!")
 
+	# 25. Тест: production economy guardrails
+	print("\n[ТЕСТ 25] Проверка production economy:")
+	assert(int(GameManager.CROPS["wheat"]["base_reward"]) == 55, "Базовая цена пшеницы должна быть 55")
+	assert(int(GameManager.CROPS["corn"]["base_reward"]) == 100, "Базовая цена кукурузы должна быть 100")
+	assert(int(GameManager.CROPS["sunflower"]["base_reward"]) == 175, "Базовая цена подсолнечника должна быть 175")
+	assert(int(GameManager.CROPS["carrot"]["base_reward"]) == 275, "Базовая цена моркови должна быть 275")
+
+	var wheat_margin_before_fuel: int = int(GameManager.CROPS["wheat"]["base_reward"]) - int(GameManager.CROPS["wheat"]["seed_cost"]) - (6 + 5 + 7 + 6)
+	assert(wheat_margin_before_fuel > 0, "Стартовая пшеница должна покрывать семена и зарплаты до топлива")
+	assert(GameManager.MAX_CROP_SALE_MULTIPLIER <= 6.0, "Итоговый crop sale multiplier должен иметь жёсткий late-game cap")
+	assert(FieldFSM.FUEL_BURN_LITERS_PER_SECOND <= 0.12, "Базовый расход топлива не должен съедать всю раннюю маржу")
+
+	var gh_banana_net: int = int(GameManager.GREENHOUSE_CROPS["bananas"]["reward"]) - int(GameManager.GREENHOUSE_CROPS["bananas"]["seed_cost"])
+	var gh_mango_net: int = int(GameManager.GREENHOUSE_CROPS["mango"]["reward"]) - int(GameManager.GREENHOUSE_CROPS["mango"]["seed_cost"])
+	assert(gh_banana_net == 25, "Банановая теплица должна быть вспомогательным доходом, а не money printer")
+	assert(gh_mango_net == 60, "Поздняя теплица должна иметь умеренную маржу")
+
+	var flour_input_value: float = float(GameManager.CROPS["wheat"]["base_reward"])
+	var flour_output_value: float = float(ProcessingManager.FACILITIES["flour_mill"]["output_amount"]) * float(ProcessingManager.PRODUCTS["flour"]["price"])
+	var oil_input_value: float = 0.5 * float(GameManager.CROPS["sunflower"]["base_reward"])
+	var oil_output_value: float = float(ProcessingManager.FACILITIES["oil_press"]["output_amount"]) * float(ProcessingManager.PRODUCTS["oil"]["price"])
+	var milk_input_value: float = 20.0 * float(LivestockManager.MILK_PRICE)
+	var cheese_output_value: float = float(ProcessingManager.FACILITIES["dairy"]["output_amount"]) * float(ProcessingManager.PRODUCTS["cheese"]["price"])
+
+	assert(flour_output_value > flour_input_value and flour_output_value <= flour_input_value * 1.35, "Мука должна давать контролируемую добавленную стоимость")
+	assert(oil_output_value > oil_input_value and oil_output_value <= oil_input_value * 1.35, "Масло должно давать контролируемую добавленную стоимость")
+	assert(cheese_output_value > milk_input_value and cheese_output_value <= milk_input_value * 1.35, "Сыр должен давать контролируемую добавленную стоимость")
+	print("  ✔ ТЕСТ 25 УСПЕШНО ПРОЙДЕН!")
+
 	print("\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ! СИСТЕМА ПОЛНОСТЬЮ ИСПРАВНА!")
 	quit(0)
