@@ -15,6 +15,7 @@ const AchievementManager = preload("res://scripts/AchievementManager.gd")
 const OfflineProgressManager = preload("res://scripts/OfflineProgressManager.gd")
 const LivestockManager = preload("res://scripts/LivestockManager.gd")
 const ProcessingManager = preload("res://scripts/ProcessingManager.gd")
+const MultiFieldManager = preload("res://scripts/MultiFieldManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 
@@ -76,6 +77,9 @@ var livestock_container: VBoxContainer
 
 # Переработка (динамическая вкладка)
 var processing_container: VBoxContainer
+
+# Несколько участков (динамическая вкладка)
+var fields_container: VBoxContainer
 
 # Магазин семян
 @onready var seed_container: VBoxContainer = $VBox/TabContainer/Магазин/ScrollSeeds/VBoxSeeds
@@ -177,6 +181,7 @@ func _ready() -> void:
 	_setup_offline_tab()
 	_setup_livestock_tab()
 	_setup_processing_tab()
+	_setup_fields_tab()
 	_setup_monitors_list()
 	_setup_graphics_and_fps()
 	_setup_garage_and_decor()
@@ -1911,6 +1916,216 @@ func _refresh_processing_ui() -> void:
 	product_box.add_child(sell_all)
 	processing_container.add_child(product_panel)
 
+func _setup_fields_tab() -> void:
+	if fields_container != null:
+		return
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.name = "Участки"
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	tab_container.add_child(margin)
+
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
+
+	fields_container = VBoxContainer.new()
+	fields_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fields_container.add_theme_constant_override("separation", 10)
+	scroll.add_child(fields_container)
+
+func _field_monitor_name(index: int) -> String:
+	var count: int = DisplayServer.get_screen_count()
+	if index >= 0 and index < count:
+		var rect: Rect2i = DisplayServer.screen_get_usable_rect(index)
+		return "Монитор %d (%dx%d)" % [index + 1, rect.size.x, rect.size.y]
+	return "Не назначен"
+
+func _refresh_fields_ui() -> void:
+	if fields_container == null:
+		return
+
+	for child in fields_container.get_children():
+		child.queue_free()
+
+	if not MultiFieldManager.initialized:
+		var loading: Label = Label.new()
+		loading.text = "🌾 Участки загружаются..."
+		fields_container.add_child(loading)
+		return
+
+	var title: Label = Label.new()
+	title.add_theme_font_size_override("font_size", 16)
+	title.text = "🌾 Производственные участки"
+	fields_container.add_child(title)
+
+	var note: Label = Label.new()
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.text = "Основное поле остаётся визуальной desktop-полосой. Дополнительные участки работают как независимые автономные зоны. Привязка к монитору сохраняется как производственное назначение; отдельный рендер каждого участка будет доработан на этапе production hardening."
+	fields_container.add_child(note)
+
+	var primary: PanelContainer = PanelContainer.new()
+	var primary_box: VBoxContainer = VBoxContainer.new()
+	primary_box.add_theme_constant_override("separation", 4)
+	primary.add_child(primary_box)
+
+	var primary_title: Label = Label.new()
+	primary_title.add_theme_font_size_override("font_size", 15)
+	primary_title.text = "🟢 Основное поле — визуальное"
+	primary_box.add_child(primary_title)
+
+	var primary_crop: Dictionary = GameManager.CROPS.get(GameManager.current_crop, {})
+	var primary_info: Label = Label.new()
+	primary_info.text = "Культура: %s | окно: %s" % [
+		str(primary_crop.get("name", GameManager.current_crop)),
+		"все мониторы" if SettingsManager.get_screen_index() == WindowManager.SCREEN_ALL_MONITORS else _field_monitor_name(SettingsManager.get_screen_index())
+	]
+	primary_box.add_child(primary_info)
+	fields_container.add_child(primary)
+
+	for field_id in MultiFieldManager.AUX_FIELD_IDS:
+		var field: Dictionary = MultiFieldManager.get_field(field_id)
+		var panel: PanelContainer = PanelContainer.new()
+		var box: VBoxContainer = VBoxContainer.new()
+		box.add_theme_constant_override("separation", 6)
+		panel.add_child(box)
+
+		var field_title: Label = Label.new()
+		field_title.add_theme_font_size_override("font_size", 15)
+		field_title.text = "🟨 %s" % str(field.get("name", field_id))
+		box.add_child(field_title)
+
+		if not bool(field.get("unlocked", false)):
+			var required: int = MultiFieldManager.get_required_level(field_id)
+			var cost: int = MultiFieldManager.get_unlock_cost(field_id)
+			var locked_info: Label = Label.new()
+			locked_info.text = "Открывается с уровня %d | стоимость участка: %d 🪙" % [required, cost]
+			box.add_child(locked_info)
+
+			var unlock_btn: Button = Button.new()
+			unlock_btn.text = "Открыть участок (%d 🪙)" % cost
+			unlock_btn.disabled = ProgressionManager.farm_level < required or GameManager.coins < cost
+			var unlock_id: String = field_id
+			unlock_btn.pressed.connect(func(target_id: String = unlock_id):
+				if MultiFieldManager.unlock_field(target_id):
+					_update_ui()
+			)
+			box.add_child(unlock_btn)
+			fields_container.add_child(panel)
+			continue
+
+		var level: int = int(field.get("level", 1))
+		var cycle_seconds: float = MultiFieldManager.get_cycle_seconds(field_id)
+		var stats: Label = Label.new()
+		stats.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		stats.text = "Уровень %d/%d | цикл %.0f мин | урожай x%.2f | завершено %d циклов | всего %.0f кг" % [
+			level,
+			MultiFieldManager.MAX_LEVEL,
+			cycle_seconds / 60.0,
+			MultiFieldManager.get_yield_multiplier(field_id),
+			int(field.get("cycles_completed", 0)),
+			float(field.get("total_harvest_kg", 0.0))
+		]
+		box.add_child(stats)
+
+		var progress: ProgressBar = ProgressBar.new()
+		progress.min_value = 0.0
+		progress.max_value = 100.0
+		progress.value = MultiFieldManager.get_progress_ratio(field_id) * 100.0
+		progress.show_percentage = true
+		progress.custom_minimum_size = Vector2(320, 18)
+		box.add_child(progress)
+
+		var crop_row: HBoxContainer = HBoxContainer.new()
+		crop_row.add_theme_constant_override("separation", 8)
+		box.add_child(crop_row)
+
+		var crop_label: Label = Label.new()
+		crop_label.text = "Культура:"
+		crop_row.add_child(crop_label)
+
+		var crop_select: OptionButton = OptionButton.new()
+		crop_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var selected_crop_idx: int = 0
+		var crop_idx: int = 0
+		for crop_id in GameManager.CROPS:
+			if not ProgressionManager.can_unlock_crop(crop_id):
+				continue
+			var crop_data: Dictionary = GameManager.CROPS[crop_id]
+			crop_select.add_item(str(crop_data.get("name", crop_id)), crop_idx)
+			crop_select.set_item_metadata(crop_idx, crop_id)
+			if str(field.get("crop_id", "wheat")) == crop_id:
+				selected_crop_idx = crop_idx
+			crop_idx += 1
+		crop_select.selected = selected_crop_idx
+		var crop_field_id: String = field_id
+		crop_select.item_selected.connect(func(index: int, target_id: String = crop_field_id):
+			var selected_crop: String = str(crop_select.get_item_metadata(index))
+			if MultiFieldManager.set_crop(target_id, selected_crop):
+				_update_ui()
+		)
+		crop_row.add_child(crop_select)
+
+		var monitor_row: HBoxContainer = HBoxContainer.new()
+		monitor_row.add_theme_constant_override("separation", 8)
+		box.add_child(monitor_row)
+
+		var monitor_label: Label = Label.new()
+		monitor_label.text = "Зона / монитор:"
+		monitor_row.add_child(monitor_label)
+
+		var monitor_select: OptionButton = OptionButton.new()
+		monitor_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var screen_count: int = max(1, DisplayServer.get_screen_count())
+		var saved_monitor: int = int(field.get("monitor_index", 0))
+		var selected_monitor: int = clampi(saved_monitor, 0, screen_count - 1)
+		for i in range(screen_count):
+			monitor_select.add_item(_field_monitor_name(i), i)
+			monitor_select.set_item_metadata(i, i)
+		monitor_select.selected = selected_monitor
+		var monitor_field_id: String = field_id
+		monitor_select.item_selected.connect(func(index: int, target_id: String = monitor_field_id):
+			MultiFieldManager.set_monitor(target_id, int(monitor_select.get_item_metadata(index)))
+			_update_ui()
+		)
+		monitor_row.add_child(monitor_select)
+
+		var actions: HBoxContainer = HBoxContainer.new()
+		actions.add_theme_constant_override("separation", 8)
+		box.add_child(actions)
+
+		var upgrade_btn: Button = Button.new()
+		if level >= MultiFieldManager.MAX_LEVEL:
+			upgrade_btn.text = "Участок MAX ✔"
+			upgrade_btn.disabled = true
+		else:
+			var upgrade_cost: int = MultiFieldManager.get_upgrade_cost(field_id)
+			upgrade_btn.text = "Улучшить участок (%d 🪙)" % upgrade_cost
+			upgrade_btn.disabled = GameManager.coins < upgrade_cost
+			var upgrade_id: String = field_id
+			upgrade_btn.pressed.connect(func(target_id: String = upgrade_id):
+				if MultiFieldManager.upgrade_field(target_id):
+					_update_ui()
+			)
+		actions.add_child(upgrade_btn)
+
+		var quality_info: Label = Label.new()
+		quality_info.text = "Автономное качество: B | эксплуатация: семена + %d 🪙/цикл" % (level * 8)
+		actions.add_child(quality_info)
+
+		fields_container.add_child(panel)
+
+	var totals: Label = Label.new()
+	totals.text = "Дополнительные участки всего: %d циклов | %.0f кг урожая" % [
+		MultiFieldManager.total_aux_cycles,
+		MultiFieldManager.total_aux_harvest_kg
+	]
+	fields_container.add_child(totals)
+
 func _setup_repair_buttons() -> void:
 	var do_repair = func():
 		repair_requested.emit()
@@ -1937,6 +2152,7 @@ func _update_ui() -> void:
 	_refresh_offline_ui()
 	_refresh_livestock_ui()
 	_refresh_processing_ui()
+	_refresh_fields_ui()
 
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins
