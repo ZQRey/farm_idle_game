@@ -9,6 +9,7 @@ const VehicleManager = preload("res://scripts/VehicleManager.gd")
 const WorkerManager = preload("res://scripts/WorkerManager.gd")
 const BuildingManager = preload("res://scripts/BuildingManager.gd")
 const QualityManager = preload("res://scripts/QualityManager.gd")
+const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const AssetGenerator = preload("res://tools/AssetGenerator.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
@@ -432,7 +433,7 @@ func _update_fsm(delta: float) -> void:
 	var volunteer_speed_mod: float = 1.70 if GameManager.is_volunteers_active else 1.0
 
 	# Стандартное движение FSM
-	var effective_speed: float = vehicle_speed * GameManager.speed_multiplier * weather_speed_mod * fuel_speed_mod * durability_speed_mod * volunteer_speed_mod
+	var effective_speed: float = vehicle_speed * GameManager.speed_multiplier * weather_speed_mod * fuel_speed_mod * durability_speed_mod * volunteer_speed_mod * PositiveEventManager.get_speed_multiplier()
 
 	match current_state:
 		State.PLOWING:
@@ -882,7 +883,7 @@ func _start_growing() -> void:
 	state_timer = 0.0
 
 func _process_growing(delta: float) -> void:
-	var growth_rate: float = (1.30 if current_weather_id == 1 else weather_speed_mod) * WorkerManager.get_phase_speed_multiplier("growing") * BuildingManager.get_growth_multiplier()
+	var growth_rate: float = (1.30 if current_weather_id == 1 else weather_speed_mod) * WorkerManager.get_phase_speed_multiplier("growing") * BuildingManager.get_growth_multiplier() * PositiveEventManager.get_growth_multiplier()
 	state_timer += delta * growth_rate
 	var crop_data: Dictionary = GameManager.get_current_crop_data()
 	var total_time: float = float(crop_data.get("growth_time", 8.0))
@@ -977,6 +978,7 @@ func _finish_hauling_cycle() -> void:
 	harvest_kg *= VehicleManager.get_capacity_multiplier(VehicleManager.ROLE_HARVESTER)
 	harvest_kg *= WorkerManager.get_yield_multiplier()
 	harvest_kg *= BuildingManager.get_yield_multiplier()
+	harvest_kg *= PositiveEventManager.get_yield_multiplier()
 
 	var quality: Dictionary = QualityManager.calculate_quality(crop_id, current_weather_id)
 	var quality_grade: String = str(quality.get("grade", "B"))

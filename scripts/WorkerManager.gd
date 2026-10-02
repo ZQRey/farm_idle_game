@@ -2,6 +2,7 @@ class_name WorkerManager
 extends RefCounted
 
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
+const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
 
 const MAX_WORKERS: int = 8
 const MAX_LEVEL: int = 20
@@ -216,7 +217,7 @@ static func record_cycle_completion() -> Dictionary:
 	for worker_id in workers:
 		var worker: Dictionary = workers[worker_id]
 		var profession: String = str(worker.get("profession", ""))
-		var gained: int = _xp_for_profession(profession)
+		var gained: int = int(round(float(_xp_for_profession(profession)) * PositiveEventManager.get_worker_xp_multiplier()))
 		total_xp += gained
 		var before_level: int = int(worker.get("level", 1))
 		_add_worker_xp(worker_id, gained)

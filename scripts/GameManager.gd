@@ -9,6 +9,7 @@ const VehicleManager = preload("res://scripts/VehicleManager.gd")
 const WorkerManager = preload("res://scripts/WorkerManager.gd")
 const BuildingManager = preload("res://scripts/BuildingManager.gd")
 const QualityManager = preload("res://scripts/QualityManager.gd")
+const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
 
 signal bankruptcy_declared
 signal season_changed(new_season: Season, season_name: String)
@@ -257,6 +258,7 @@ static func init_from_settings() -> void:
 	)
 	_sync_legacy_vehicle_state()
 	QualityManager.init_from_settings()
+	PositiveEventManager.init_from_settings()
 
 	windmill_condition = float(SettingsManager.config.get_value("durability", "windmill_condition", 100.0))
 	barn_condition = float(SettingsManager.config.get_value("durability", "barn_condition", 100.0))
@@ -329,6 +331,7 @@ static func save_to_settings() -> void:
 	WorkerManager.write_to_config()
 	BuildingManager.write_to_config()
 	QualityManager.write_to_config()
+	PositiveEventManager.write_to_config()
 
 	SettingsManager.config.set_value("mechanics", "fuel_level", fuel_level)
 	SettingsManager.config.set_value("mechanics", "auto_refuel", auto_refuel)
@@ -391,6 +394,7 @@ static func calculate_crop_sale_value(crop_id: String, amount_kg: float, quality
 	value *= get_season_price_multiplier()
 	value *= MarketManager.get_effective_multiplier(crop_id)
 	value *= QualityManager.get_price_multiplier(quality_grade)
+	value *= PositiveEventManager.get_sale_multiplier()
 	return max(0, int(round(value)))
 
 static func calculate_quality_breakdown_sale_value(crop_id: String, breakdown: Dictionary) -> int:
@@ -731,6 +735,8 @@ static func declare_bankruptcy() -> void:
 		refresh_infrastructure_effects()
 	if QualityManager.initialized:
 		QualityManager.reset_all()
+	if PositiveEventManager.initialized:
+		PositiveEventManager.reset_all()
 
 	# Блокировка платных культур
 	for cid in CROPS:

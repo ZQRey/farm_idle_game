@@ -6,6 +6,7 @@ const VehicleManager = preload("res://scripts/VehicleManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const AssetGenerator = preload("res://tools/AssetGenerator.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
+const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
 
 enum Weather {
 	CLEAR, # 0. Ясно
@@ -25,6 +26,7 @@ signal breakdown_resolved
 signal police_arrived
 signal police_resolved
 signal repair_progress(status: String)
+signal positive_event_started(event_data: Dictionary)
 
 @export var field_fsm: FieldFSM
 
@@ -363,15 +365,24 @@ func _try_trigger_random_event() -> void:
 
 	var roll: float = randf()
 
-	if roll < 0.20:
+	if roll < 0.18:
+		var positive: Dictionary = PositiveEventManager.try_start_random_event()
+		if not positive.is_empty():
+			print("[EventManager] %s %s: %s" % [
+				str(positive.get("icon", "✨")),
+				str(positive.get("title", "Позитивное событие")),
+				str(positive.get("description", ""))
+			])
+			positive_event_started.emit(positive)
+	elif roll < 0.33:
 		# Вороны (не замораживают игру!)
 		field_fsm.spawn_crows_event()
 		print("[EventManager] 🦅 Стая ворон прилетела на поле!")
-	elif roll < 0.35 and field_fsm.current_state == FieldFSM.State.SOWING and not GameManager.has_seeder_tractor:
+	elif roll < 0.45 and field_fsm.current_state == FieldFSM.State.SOWING and not GameManager.has_seeder_tractor:
 		trigger_strike()
-	elif roll < 0.35 + _get_breakdown_probability() and can_breakdown_occur():
+	elif roll < 0.45 + _get_breakdown_probability() and can_breakdown_occur():
 		trigger_breakdown()
-	elif roll < 0.65 and can_breakdown_occur() and not is_police_active:
+	elif roll < 0.76 and can_breakdown_occur() and not is_police_active:
 		trigger_police()
 
 # 1. ЗАБАСТОВКА
@@ -602,6 +613,8 @@ func reset_all_events() -> void:
 
 	current_weather = Weather.CLEAR
 	weather_timer = 0.0
+	if PositiveEventManager.initialized:
+		PositiveEventManager.clear_active_event()
 	weather_changed.emit(Weather.CLEAR, "Ясно ☀️")
 
 

@@ -10,6 +10,7 @@ const VehicleManager = preload("res://scripts/VehicleManager.gd")
 const WorkerManager = preload("res://scripts/WorkerManager.gd")
 const BuildingManager = preload("res://scripts/BuildingManager.gd")
 const QualityManager = preload("res://scripts/QualityManager.gd")
+const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 
@@ -56,6 +57,9 @@ var workers_container: VBoxContainer
 
 # Инфраструктура (динамическая вкладка)
 var buildings_container: VBoxContainer
+
+# Позитивные события (динамическая вкладка)
+var positive_events_container: VBoxContainer
 
 # Магазин семян
 @onready var seed_container: VBoxContainer = $VBox/TabContainer/Магазин/ScrollSeeds/VBoxSeeds
@@ -152,6 +156,7 @@ func _ready() -> void:
 	_setup_fleet_tab()
 	_setup_workers_tab()
 	_setup_buildings_tab()
+	_setup_positive_events_tab()
 	_setup_monitors_list()
 	_setup_graphics_and_fps()
 	_setup_garage_and_decor()
@@ -1175,6 +1180,98 @@ func _refresh_buildings_ui() -> void:
 		row.add_child(btn)
 		buildings_container.add_child(panel)
 
+func _setup_positive_events_tab() -> void:
+	if positive_events_container != null:
+		return
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.name = "События"
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	tab_container.add_child(margin)
+
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
+
+	positive_events_container = VBoxContainer.new()
+	positive_events_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	positive_events_container.add_theme_constant_override("separation", 10)
+	scroll.add_child(positive_events_container)
+
+func _format_positive_event_time(seconds: int) -> String:
+	var safe: int = max(0, seconds)
+	return "%d:%02d" % [safe / 60, safe % 60]
+
+func _refresh_positive_events_ui() -> void:
+	if positive_events_container == null:
+		return
+
+	for child in positive_events_container.get_children():
+		child.queue_free()
+
+	var title: Label = Label.new()
+	title.add_theme_font_size_override("font_size", 16)
+	title.text = "✨ Позитивные и редкие события"
+	positive_events_container.add_child(title)
+
+	var stats: Label = Label.new()
+	stats.text = "Всего позитивных событий: %d | редких: %d" % [
+		PositiveEventManager.total_triggered,
+		PositiveEventManager.rare_triggered
+	]
+	positive_events_container.add_child(stats)
+
+	var active_panel: PanelContainer = PanelContainer.new()
+	var active_box: VBoxContainer = VBoxContainer.new()
+	active_box.add_theme_constant_override("separation", 5)
+	active_panel.add_child(active_box)
+
+	var active_title: Label = Label.new()
+	if PositiveEventManager.has_active_event():
+		var active: Dictionary = PositiveEventManager.get_active_event()
+		active_title.text = "%s %s — осталось %s" % [
+			str(active.get("icon", "✨")),
+			str(active.get("title", "Событие")),
+			_format_positive_event_time(PositiveEventManager.get_seconds_left())
+		]
+		var effect: Label = Label.new()
+		effect.text = str(active.get("description", ""))
+		effect.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		active_box.add_child(active_title)
+		active_box.add_child(effect)
+	else:
+		active_title.text = "Сейчас активного позитивного события нет."
+		active_box.add_child(active_title)
+	positive_events_container.add_child(active_panel)
+
+	var catalog_title: Label = Label.new()
+	catalog_title.add_theme_font_size_override("font_size", 15)
+	catalog_title.text = "Возможные события"
+	positive_events_container.add_child(catalog_title)
+
+	for event_id in PositiveEventManager.EVENT_DEFS:
+		var event_info: Dictionary = PositiveEventManager.EVENT_DEFS[event_id]
+		var label: Label = Label.new()
+		var rarity: String = str(event_info.get("rarity", "common"))
+		var rarity_text: String = "редкое" if rarity == "rare" else ("необычное" if rarity == "uncommon" else "обычное")
+		label.text = "%s %s [%s] — %s" % [
+			str(event_info.get("icon", "✨")),
+			str(event_info.get("title", event_id)),
+			rarity_text,
+			str(event_info.get("description", ""))
+		]
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		positive_events_container.add_child(label)
+
+	var note: Label = Label.new()
+	note.text = "События возникают случайно во время работы фермы. Одновременно действует только один позитивный эффект."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	positive_events_container.add_child(note)
+
 func _setup_repair_buttons() -> void:
 	var do_repair = func():
 		repair_requested.emit()
@@ -1196,6 +1293,7 @@ func _update_ui() -> void:
 	_refresh_fleet_ui()
 	_refresh_workers_ui()
 	_refresh_buildings_ui()
+	_refresh_positive_events_ui()
 
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins
