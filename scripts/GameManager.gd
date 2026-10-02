@@ -21,6 +21,8 @@ enum Season { SPRING, SUMMER, AUTUMN, WINTER }
 static var current_season: Season = Season.SPRING
 
 # Описания полевых культур (seed_cost = стоимость партии семян на 1 цикл сева)
+const MAX_CROP_SALE_MULTIPLIER: float = 6.0
+
 static var CROPS: Dictionary = {
 	"wheat": {
 		"id": "wheat",
@@ -28,7 +30,7 @@ static var CROPS: Dictionary = {
 		"row_index": 0,
 		"seed_cost": 10,
 		"growth_time": 870.0,
-		"base_reward": 40,
+		"base_reward": 55,
 		"unlocked": true
 	},
 	"corn": {
@@ -37,7 +39,7 @@ static var CROPS: Dictionary = {
 		"row_index": 1,
 		"seed_cost": 35,
 		"growth_time": 930.0,
-		"base_reward": 95,
+		"base_reward": 100,
 		"unlocked": false
 	},
 	"sunflower": {
@@ -46,7 +48,7 @@ static var CROPS: Dictionary = {
 		"row_index": 2,
 		"seed_cost": 80,
 		"growth_time": 990.0,
-		"base_reward": 230,
+		"base_reward": 175,
 		"unlocked": false
 	},
 	"carrot": {
@@ -55,7 +57,7 @@ static var CROPS: Dictionary = {
 		"row_index": 3,
 		"seed_cost": 160,
 		"growth_time": 1050.0,
-		"base_reward": 560,
+		"base_reward": 275,
 		"unlocked": false
 	}
 }
@@ -67,7 +69,7 @@ const GREENHOUSE_CROPS: Dictionary = {
 		"name": "🍌 Бананы",
 		"seed_cost": 30,
 		"growth_time": 480.0,
-		"reward": 90,
+		"reward": 55,
 		"frame": 0
 	},
 	"oranges": {
@@ -75,7 +77,7 @@ const GREENHOUSE_CROPS: Dictionary = {
 		"name": "🍊 Апельсины",
 		"seed_cost": 50,
 		"growth_time": 600.0,
-		"reward": 160,
+		"reward": 85,
 		"frame": 1
 	},
 	"walnuts": {
@@ -83,7 +85,7 @@ const GREENHOUSE_CROPS: Dictionary = {
 		"name": "🥜 Грецкие орехи",
 		"seed_cost": 80,
 		"growth_time": 720.0,
-		"reward": 260,
+		"reward": 125,
 		"frame": 2
 	},
 	"mango": {
@@ -91,7 +93,7 @@ const GREENHOUSE_CROPS: Dictionary = {
 		"name": "🥭 Манго",
 		"seed_cost": 120,
 		"growth_time": 840.0,
-		"reward": 400,
+		"reward": 180,
 		"frame": 3
 	}
 }
@@ -406,20 +408,25 @@ static func calculate_crop_sale_value(crop_id: String, amount_kg: float, quality
 	if amount_kg <= 0.0:
 		return 0
 	var data: Dictionary = CROPS.get(crop_id, CROPS["wheat"])
-	var value: float = float(data.get("base_reward", 40)) * (amount_kg / 100.0)
+	var base_value: float = float(data.get("base_reward", 55)) * (amount_kg / 100.0)
+	var multiplier: float = 1.0
 
 	if has_barn:
-		value *= 1.20
+		multiplier *= 1.20
 	if has_windmill:
-		value *= 1.50
-	value *= BuildingManager.get_sale_multiplier()
-	value *= get_season_price_multiplier()
-	value *= MarketManager.get_effective_multiplier(crop_id)
-	value *= QualityManager.get_price_multiplier(quality_grade)
-	value *= PrestigeManager.get_sale_multiplier()
+		multiplier *= 1.50
+	multiplier *= BuildingManager.get_sale_multiplier()
+	multiplier *= get_season_price_multiplier()
+	multiplier *= MarketManager.get_effective_multiplier(crop_id)
+	multiplier *= QualityManager.get_price_multiplier(quality_grade)
+	multiplier *= PrestigeManager.get_sale_multiplier()
 	if include_temporary_bonus:
-		value *= PositiveEventManager.get_sale_multiplier()
-	return max(0, int(round(value)))
+		multiplier *= PositiveEventManager.get_sale_multiplier()
+
+	# Защита late-game экономики: независимые бонусы остаются полезными,
+	# но их произведение не превращает одну партию в экспоненциальный money printer.
+	multiplier = min(multiplier, MAX_CROP_SALE_MULTIPLIER)
+	return max(0, int(round(base_value * multiplier)))
 
 static func calculate_quality_breakdown_sale_value(crop_id: String, breakdown: Dictionary, include_temporary_bonus: bool = true) -> int:
 	var total: int = 0
