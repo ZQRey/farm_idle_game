@@ -13,6 +13,7 @@ const QualityManager = preload("res://scripts/QualityManager.gd")
 const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
 const AchievementManager = preload("res://scripts/AchievementManager.gd")
 const OfflineProgressManager = preload("res://scripts/OfflineProgressManager.gd")
+const LivestockManager = preload("res://scripts/LivestockManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 
@@ -68,6 +69,9 @@ var achievements_container: VBoxContainer
 
 # Offline progress (динамическая вкладка)
 var offline_container: VBoxContainer
+
+# Животноводство (динамическая вкладка)
+var livestock_container: VBoxContainer
 
 # Магазин семян
 @onready var seed_container: VBoxContainer = $VBox/TabContainer/Магазин/ScrollSeeds/VBoxSeeds
@@ -167,6 +171,7 @@ func _ready() -> void:
 	_setup_positive_events_tab()
 	_setup_achievements_tab()
 	_setup_offline_tab()
+	_setup_livestock_tab()
 	_setup_monitors_list()
 	_setup_graphics_and_fps()
 	_setup_garage_and_decor()
@@ -1506,6 +1511,217 @@ func _refresh_offline_ui() -> void:
 
 	offline_container.add_child(panel)
 
+func _setup_livestock_tab() -> void:
+	if livestock_container != null:
+		return
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.name = "Животноводство"
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	tab_container.add_child(margin)
+
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
+
+	livestock_container = VBoxContainer.new()
+	livestock_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	livestock_container.add_theme_constant_override("separation", 10)
+	scroll.add_child(livestock_container)
+
+func _refresh_livestock_ui() -> void:
+	if livestock_container == null:
+		return
+
+	for child in livestock_container.get_children():
+		child.queue_free()
+
+	if not LivestockManager.initialized:
+		var loading: Label = Label.new()
+		loading.text = "🐄 Животноводство загружается..."
+		livestock_container.add_child(loading)
+		return
+
+	var title: Label = Label.new()
+	title.add_theme_font_size_override("font_size", 16)
+	title.text = "🐔🐄 Животноводство"
+	livestock_container.add_child(title)
+
+	var summary: Label = Label.new()
+	summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	summary.text = "Производственный тик: каждые %d мин | корм берётся автоматически со склада | пшеница: %.0f кг | кукуруза: %.0f кг" % [
+		int(LivestockManager.TICK_SECONDS / 60),
+		InventoryManager.get_stock("wheat"),
+		InventoryManager.get_stock("corn")
+	]
+	livestock_container.add_child(summary)
+
+	var auto_sell: CheckBox = CheckBox.new()
+	auto_sell.text = "Автоматически продавать яйца и молоко"
+	auto_sell.button_pressed = LivestockManager.auto_sell_products
+	auto_sell.toggled.connect(func(enabled: bool):
+		LivestockManager.set_auto_sell(enabled)
+		_update_ui()
+	)
+	livestock_container.add_child(auto_sell)
+
+	# Курятник
+	var coop_panel: PanelContainer = PanelContainer.new()
+	var coop_box: VBoxContainer = VBoxContainer.new()
+	coop_box.add_theme_constant_override("separation", 5)
+	coop_panel.add_child(coop_box)
+
+	var coop_title: Label = Label.new()
+	coop_title.add_theme_font_size_override("font_size", 15)
+	coop_title.text = "🐔 Курятник — ур. %d/%d | кур: %d/%d" % [
+		LivestockManager.coop_level,
+		LivestockManager.MAX_BUILDING_LEVEL,
+		LivestockManager.chickens,
+		LivestockManager.get_chicken_capacity()
+	]
+	coop_box.add_child(coop_title)
+
+	var coop_info: Label = Label.new()
+	coop_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	coop_info.text = "На 1 курицу за тик: %.0f кг пшеницы + %.0f кг кукурузы → %.0f яйца. Цена яйца: %d 🪙." % [
+		LivestockManager.CHICKEN_WHEAT_KG,
+		LivestockManager.CHICKEN_CORN_KG,
+		LivestockManager.EGGS_PER_CHICKEN,
+		LivestockManager.EGG_PRICE
+	]
+	coop_box.add_child(coop_info)
+
+	var coop_actions: HBoxContainer = HBoxContainer.new()
+	coop_actions.add_theme_constant_override("separation", 8)
+	coop_box.add_child(coop_actions)
+
+	var coop_upgrade: Button = Button.new()
+	var coop_required: int = ProgressionManager.get_feature_required_level("chicken_coop")
+	if not ProgressionManager.can_access_feature("chicken_coop"):
+		coop_upgrade.text = "🔒 Курятник с ур. %d" % coop_required
+		coop_upgrade.disabled = true
+	elif LivestockManager.coop_level >= LivestockManager.MAX_BUILDING_LEVEL:
+		coop_upgrade.text = "Курятник MAX ✔"
+		coop_upgrade.disabled = true
+	else:
+		var coop_cost: int = LivestockManager.get_coop_upgrade_cost()
+		coop_upgrade.text = "Построить / улучшить (%d 🪙)" % coop_cost
+		coop_upgrade.disabled = GameManager.coins < coop_cost
+		coop_upgrade.pressed.connect(func():
+			if LivestockManager.upgrade_coop():
+				_update_ui()
+		)
+	coop_actions.add_child(coop_upgrade)
+
+	var buy_chicken: Button = Button.new()
+	buy_chicken.text = "Купить курицу (%d 🪙)" % LivestockManager.CHICKEN_COST
+	buy_chicken.disabled = LivestockManager.chickens >= LivestockManager.get_chicken_capacity() or GameManager.coins < LivestockManager.CHICKEN_COST
+	buy_chicken.pressed.connect(func():
+		if LivestockManager.buy_chicken():
+			_update_ui()
+	)
+	coop_actions.add_child(buy_chicken)
+	livestock_container.add_child(coop_panel)
+
+	# Коровник
+	var barn_panel: PanelContainer = PanelContainer.new()
+	var barn_box: VBoxContainer = VBoxContainer.new()
+	barn_box.add_theme_constant_override("separation", 5)
+	barn_panel.add_child(barn_box)
+
+	var barn_title: Label = Label.new()
+	barn_title.add_theme_font_size_override("font_size", 15)
+	barn_title.text = "🐄 Коровник — ур. %d/%d | коров: %d/%d" % [
+		LivestockManager.barn_level,
+		LivestockManager.MAX_BUILDING_LEVEL,
+		LivestockManager.cows,
+		LivestockManager.get_cow_capacity()
+	]
+	barn_box.add_child(barn_title)
+
+	var barn_info: Label = Label.new()
+	barn_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	barn_info.text = "На 1 корову за тик: %.0f кг пшеницы + %.0f кг кукурузы → %.0f л молока. Цена молока: %d 🪙/л." % [
+		LivestockManager.COW_WHEAT_KG,
+		LivestockManager.COW_CORN_KG,
+		LivestockManager.MILK_L_PER_COW,
+		LivestockManager.MILK_PRICE
+	]
+	barn_box.add_child(barn_info)
+
+	var barn_actions: HBoxContainer = HBoxContainer.new()
+	barn_actions.add_theme_constant_override("separation", 8)
+	barn_box.add_child(barn_actions)
+
+	var barn_upgrade: Button = Button.new()
+	var barn_required: int = ProgressionManager.get_feature_required_level("cow_barn")
+	if not ProgressionManager.can_access_feature("cow_barn"):
+		barn_upgrade.text = "🔒 Коровник с ур. %d" % barn_required
+		barn_upgrade.disabled = true
+	elif LivestockManager.barn_level >= LivestockManager.MAX_BUILDING_LEVEL:
+		barn_upgrade.text = "Коровник MAX ✔"
+		barn_upgrade.disabled = true
+	else:
+		var barn_cost: int = LivestockManager.get_barn_upgrade_cost()
+		barn_upgrade.text = "Построить / улучшить (%d 🪙)" % barn_cost
+		barn_upgrade.disabled = GameManager.coins < barn_cost
+		barn_upgrade.pressed.connect(func():
+			if LivestockManager.upgrade_barn():
+				_update_ui()
+		)
+	barn_actions.add_child(barn_upgrade)
+
+	var buy_cow: Button = Button.new()
+	buy_cow.text = "Купить корову (%d 🪙)" % LivestockManager.COW_COST
+	buy_cow.disabled = LivestockManager.cows >= LivestockManager.get_cow_capacity() or GameManager.coins < LivestockManager.COW_COST
+	buy_cow.pressed.connect(func():
+		if LivestockManager.buy_cow():
+			_update_ui()
+	)
+	barn_actions.add_child(buy_cow)
+	livestock_container.add_child(barn_panel)
+
+	var product_panel: PanelContainer = PanelContainer.new()
+	var product_box: VBoxContainer = VBoxContainer.new()
+	product_box.add_theme_constant_override("separation", 5)
+	product_panel.add_child(product_box)
+
+	var product_title: Label = Label.new()
+	product_title.add_theme_font_size_override("font_size", 15)
+	product_title.text = "🥚🥛 Продукция"
+	product_box.add_child(product_title)
+
+	var product_info: Label = Label.new()
+	product_info.text = "На складе: %.0f яиц | %.1f л молока | произведено всего: %.0f яиц / %.1f л | заработано: %d 🪙" % [
+		LivestockManager.eggs,
+		LivestockManager.milk_l,
+		LivestockManager.total_eggs_produced,
+		LivestockManager.total_milk_produced,
+		LivestockManager.total_product_coins
+	]
+	product_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	product_box.add_child(product_info)
+
+	var sell_products: Button = Button.new()
+	sell_products.text = "Продать всю продукцию"
+	sell_products.disabled = LivestockManager.eggs <= 0.0 and LivestockManager.milk_l <= 0.0
+	sell_products.pressed.connect(func():
+		if LivestockManager.sell_all_products() > 0:
+			_update_ui()
+	)
+	product_box.add_child(sell_products)
+	livestock_container.add_child(product_panel)
+
+	var feed_status: Label = Label.new()
+	var chicken_status: String = "готов" if LivestockManager.can_feed_chickens() else "нет корма / нет кур"
+	var cow_status: String = "готов" if LivestockManager.can_feed_cows() else "нет корма / нет коров"
+	feed_status.text = "Кормовые цепочки: курятник — %s; коровник — %s." % [chicken_status, cow_status]
+	livestock_container.add_child(feed_status)
+
 func _setup_repair_buttons() -> void:
 	var do_repair = func():
 		repair_requested.emit()
@@ -1530,6 +1746,7 @@ func _update_ui() -> void:
 	_refresh_positive_events_ui()
 	_refresh_achievements_ui()
 	_refresh_offline_ui()
+	_refresh_livestock_ui()
 
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins
