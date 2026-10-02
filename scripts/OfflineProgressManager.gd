@@ -70,7 +70,7 @@ static func write_to_config() -> void:
 	SettingsManager.config.set_value("offline", "last_seen_at", last_seen_at)
 	SettingsManager.config.set_value("offline", "lifetime_offline_seconds", lifetime_offline_seconds)
 	SettingsManager.config.set_value("offline", "lifetime_offline_cycles", lifetime_offline_cycles)
-	SettingsManager.config.set_value("offline", "last_report", last_report)
+	SettingsManager.config.set_value("offline", "last_report", last_report.duplicate(true))
 
 static func save_to_settings() -> void:
 	if not initialized:
