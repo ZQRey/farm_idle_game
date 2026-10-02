@@ -7,6 +7,7 @@ const ContractManager = preload("res://scripts/ContractManager.gd")
 const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const MarketManager = preload("res://scripts/MarketManager.gd")
 const VehicleManager = preload("res://scripts/VehicleManager.gd")
+const WorkerManager = preload("res://scripts/WorkerManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 
@@ -47,6 +48,9 @@ var market_container: VBoxContainer
 
 # Garage 2.0 (динамическая вкладка)
 var fleet_container: VBoxContainer
+
+# Работники (динамическая вкладка)
+var workers_container: VBoxContainer
 
 # Магазин семян
 @onready var seed_container: VBoxContainer = $VBox/TabContainer/Магазин/ScrollSeeds/VBoxSeeds
@@ -141,6 +145,7 @@ func _ready() -> void:
 	_setup_storage_tab()
 	_setup_market_tab()
 	_setup_fleet_tab()
+	_setup_workers_tab()
 	_setup_monitors_list()
 	_setup_graphics_and_fps()
 	_setup_garage_and_decor()
@@ -889,6 +894,156 @@ func _refresh_fleet_ui() -> void:
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	fleet_container.add_child(note)
 
+func _setup_workers_tab() -> void:
+	if workers_container != null:
+		return
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.name = "Работники"
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	tab_container.add_child(margin)
+
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
+
+	workers_container = VBoxContainer.new()
+	workers_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	workers_container.add_theme_constant_override("separation", 10)
+	scroll.add_child(workers_container)
+
+func _refresh_workers_ui() -> void:
+	if workers_container == null:
+		return
+
+	for child in workers_container.get_children():
+		child.queue_free()
+
+	if not WorkerManager.initialized:
+		var loading: Label = Label.new()
+		loading.text = "👨‍🌾 Персонал загружается..."
+		workers_container.add_child(loading)
+		return
+
+	var title: Label = Label.new()
+	title.add_theme_font_size_override("font_size", 16)
+	title.text = "👨‍🌾 Персонал фермы — %d/%d" % [WorkerManager.get_worker_count(), WorkerManager.MAX_WORKERS]
+	workers_container.add_child(title)
+
+	var salary: Label = Label.new()
+	salary.text = "Фонд оплаты за производственный цикл: %d 🪙 | Нанято дополнительно: %d | Повышений: %d" % [
+		WorkerManager.get_total_salary_per_cycle(),
+		WorkerManager.total_hired,
+		WorkerManager.total_levels_gained
+	]
+	workers_container.add_child(salary)
+
+	var roster_title: Label = Label.new()
+	roster_title.add_theme_font_size_override("font_size", 15)
+	roster_title.text = "Текущий штат"
+	workers_container.add_child(roster_title)
+
+	for worker in WorkerManager.get_workers():
+		var panel: PanelContainer = PanelContainer.new()
+		var row: HBoxContainer = HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		panel.add_child(row)
+
+		var profession: String = str(worker.get("profession", ""))
+		var prof_data: Dictionary = WorkerManager.PROFESSION_DATA.get(profession, {})
+		var level: int = int(worker.get("level", 1))
+		var xp: int = int(worker.get("xp", 0))
+		var required: int = WorkerManager.get_worker_xp_required(level)
+
+		var info_box: VBoxContainer = VBoxContainer.new()
+		info_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(info_box)
+
+		var info: Label = Label.new()
+		info.text = "%s %s — %s | ур. %d/%d | зарплата %d 🪙" % [
+			str(prof_data.get("icon", "👨‍🌾")),
+			str(worker.get("name", "Работник")),
+			str(prof_data.get("name", profession)),
+			level,
+			WorkerManager.MAX_LEVEL,
+			int(worker.get("salary", 0))
+		]
+		info_box.add_child(info)
+
+		var progress: Label = Label.new()
+		if level >= WorkerManager.MAX_LEVEL:
+			progress.text = "XP: MAX | циклов: %d | %s" % [
+				int(worker.get("cycles_worked", 0)),
+				str(prof_data.get("description", ""))
+			]
+		else:
+			progress.text = "XP: %d/%d | циклов: %d | %s" % [
+				xp,
+				required,
+				int(worker.get("cycles_worked", 0)),
+				str(prof_data.get("description", ""))
+			]
+		info_box.add_child(progress)
+
+		var dismiss: Button = Button.new()
+		dismiss.text = "Уволить"
+		var wid: String = str(worker.get("id", ""))
+		dismiss.disabled = WorkerManager.get_workers_by_profession(profession).size() <= 1 and profession in [
+			WorkerManager.PROF_SOWER,
+			WorkerManager.PROF_IRRIGATOR,
+			WorkerManager.PROF_HARVESTER,
+			WorkerManager.PROF_DRIVER
+		]
+		dismiss.pressed.connect(func(target_worker_id: String = wid):
+			if WorkerManager.dismiss_worker(target_worker_id):
+				_update_ui()
+		)
+		row.add_child(dismiss)
+
+		workers_container.add_child(panel)
+
+	var hire_sep: HSeparator = HSeparator.new()
+	workers_container.add_child(hire_sep)
+
+	var hire_title: Label = Label.new()
+	hire_title.add_theme_font_size_override("font_size", 15)
+	hire_title.text = "Найм специалистов"
+	workers_container.add_child(hire_title)
+
+	for profession in WorkerManager.PROFESSION_ORDER:
+		var prof_data: Dictionary = WorkerManager.PROFESSION_DATA[profession]
+		var hire_row: HBoxContainer = HBoxContainer.new()
+		hire_row.add_theme_constant_override("separation", 8)
+
+		var hire_info: Label = Label.new()
+		hire_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hire_info.text = "%s %s — %s | зарплата %d 🪙/цикл" % [
+			str(prof_data.get("icon", "👨‍🌾")),
+			str(prof_data.get("name", profession)),
+			str(prof_data.get("description", "")),
+			int(prof_data.get("salary", 0))
+		]
+		hire_row.add_child(hire_info)
+
+		var hire_cost: int = WorkerManager.get_hire_cost(profession)
+		var hire_btn: Button = Button.new()
+		hire_btn.text = "Нанять (%d 🪙)" % hire_cost
+		hire_btn.disabled = not WorkerManager.can_hire(profession) or GameManager.coins < hire_cost
+		var p: String = profession
+		hire_btn.pressed.connect(func(target_profession: String = p):
+			var cost: int = WorkerManager.get_hire_cost(target_profession)
+			if WorkerManager.can_hire(target_profession) and GameManager.spend_coins(cost):
+				var hired: Dictionary = WorkerManager.hire_worker(target_profession)
+				if not hired.is_empty():
+					_update_ui()
+		)
+		hire_row.add_child(hire_btn)
+		workers_container.add_child(hire_row)
+
 func _setup_repair_buttons() -> void:
 	var do_repair = func():
 		repair_requested.emit()
@@ -908,6 +1063,7 @@ func _update_ui() -> void:
 	_refresh_storage_ui()
 	_refresh_market_ui()
 	_refresh_fleet_ui()
+	_refresh_workers_ui()
 
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins
