@@ -194,6 +194,17 @@
 
 ---
 
+## 🛡 Production hardening
+
+- Save-файл имеет versioned schema (`CURRENT_SCHEMA_VERSION = 3`) и пошаговые миграции.
+- Перед записью нового `settings.cfg` сохраняется предыдущая корректная версия в `settings.backup.cfg`.
+- Если основной save не читается, игра автоматически пытается восстановиться из backup; при отсутствии backup создаёт безопасный новый save.
+- Критичные значения (monitor index, FPS, crop id, speed, fuel, coins) валидируются при загрузке.
+- Все manager-level save вызовы коалесцируются в памяти; физическая запись выполняется одной транзакцией центрального autosave и при выходе.
+- Добавлен `export_presets.cfg` для Windows x86_64.
+- GitHub Actions выполняет headless import/parse, полный `tools/test_validation.gd` и Windows release export.
+- Build artifacts и локальные export credentials исключены из Git.
+
 ## 📁 Структура проекта
 
 ```text
