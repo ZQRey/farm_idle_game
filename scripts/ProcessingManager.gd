@@ -52,8 +52,8 @@ const FACILITIES: Dictionary = {
 const PRODUCT_ORDER: Array[String] = ["flour", "oil", "cheese"]
 const PRODUCTS: Dictionary = {
 	"flour": {"name": "Мука", "icon": "🌾", "unit": "кг", "price": 1},
-	"oil": {"name": "Подсолнечное масло", "icon": "🫗", "unit": "л", "price": 8},
-	"cheese": {"name": "Сыр", "icon": "🧀", "unit": "кг", "price": 28}
+	"oil": {"name": "Подсолнечное масло", "icon": "🫗", "unit": "л", "price": 6},
+	"cheese": {"name": "Сыр", "icon": "🧀", "unit": "кг", "price": 24}
 }
 
 static var facility_levels: Dictionary = {}
