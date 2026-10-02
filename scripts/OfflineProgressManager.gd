@@ -117,6 +117,7 @@ static func _simulate_offline_window(window: Dictionary) -> Dictionary:
 
 	for _i in range(requested_cycles):
 		var fuel_needed: float = _estimate_fuel_per_cycle()
+		var pre_cycle_refuel_cost: int = 0
 		if GameManager.fuel_level + 0.001 < fuel_needed and not GameManager.auto_refuel:
 			report["stopped_for_fuel"] = true
 			break
@@ -125,7 +126,8 @@ static func _simulate_offline_window(window: Dictionary) -> Dictionary:
 			var refill_amount: float = GameManager.max_fuel - GameManager.fuel_level
 			var refill_cost: int = GameManager.calculate_refuel_cost(refill_amount)
 			if refill_amount > 0.0 and GameManager.coins >= refill_cost:
-				GameManager.refuel(refill_amount)
+				if GameManager.refuel(refill_amount):
+					pre_cycle_refuel_cost = refill_cost
 			else:
 				report["stopped_for_fuel"] = true
 				break
@@ -143,8 +145,9 @@ static func _simulate_offline_window(window: Dictionary) -> Dictionary:
 		var overflow_kg: float = float(deposit.get("overflow_kg", 0.0))
 
 		var production: Dictionary = GameManager.process_production_costs()
-		var cycle_net: int = -int(production.get("total_cost", 0))
-		report["operating_costs"] = int(report["operating_costs"]) + int(production.get("total_cost", 0))
+		var cycle_cost: int = int(production.get("total_cost", 0)) + pre_cycle_refuel_cost
+		var cycle_net: int = -cycle_cost
+		report["operating_costs"] = int(report["operating_costs"]) + cycle_cost
 
 		if stored_kg > 0.0 and InventoryManager.auto_sell_on_harvest:
 			var sold_breakdown: Dictionary = InventoryManager.remove_crop_with_quality(crop_id, stored_kg)
