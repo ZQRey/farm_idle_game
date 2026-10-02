@@ -12,6 +12,7 @@ const VehicleManager = preload("res://scripts/VehicleManager.gd")
 const WorkerManager = preload("res://scripts/WorkerManager.gd")
 const BuildingManager = preload("res://scripts/BuildingManager.gd")
 const QualityManager = preload("res://scripts/QualityManager.gd")
+const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 
@@ -543,6 +544,48 @@ func _init() -> void:
 	assert(is_equal_approx(QualityManager.get_total_kg_for_grade("A"), 125.0), "Статистика качества должна восстановиться")
 	assert(QualityManager.get_last_grade("wheat") == "A", "Последний класс должен сохраниться")
 	print("  ✔ ТЕСТ 14 УСПЕШНО ПРОЙДЕН!")
+
+	# 15. Тест: позитивные и редкие события, эффекты и persistence
+	print("\n[ТЕСТ 15] Проверка позитивных событий:")
+	var old_positive_event: Dictionary = PositiveEventManager.active_event.duplicate(true)
+	var old_positive_total: int = PositiveEventManager.total_triggered
+	var old_positive_rare: int = PositiveEventManager.rare_triggered
+
+	PositiveEventManager.initialized = true
+	PositiveEventManager.active_event = {}
+	PositiveEventManager.total_triggered = 0
+	PositiveEventManager.rare_triggered = 0
+
+	var help_event: Dictionary = PositiveEventManager.start_event("community_help")
+	assert(not help_event.is_empty(), "Событие помощи соседей должно запускаться")
+	assert(PositiveEventManager.get_speed_multiplier() > 1.0, "Помощь соседей должна ускорять работы")
+	assert(PositiveEventManager.get_seconds_left() > 0, "У события должно оставаться время")
+	PositiveEventManager.clear_active_event()
+
+	var lucky_event: Dictionary = PositiveEventManager.start_event("lucky_season")
+	assert(not lucky_event.is_empty(), "Редкое событие удачного сезона должно запускаться")
+	assert(PositiveEventManager.rare_triggered == 1, "Редкое событие должно учитываться в статистике")
+	assert(PositiveEventManager.get_yield_multiplier() > 1.0, "Удачный сезон должен повышать урожай")
+	assert(PositiveEventManager.get_growth_multiplier() > 1.0, "Удачный сезон должен ускорять рост")
+	assert(PositiveEventManager.get_sale_multiplier() > 1.0, "Удачный сезон должен повышать цену")
+	assert(PositiveEventManager.get_quality_bonus() > 0.0, "Удачный сезон должен повышать качество")
+
+	PositiveEventManager.save_to_settings()
+	PositiveEventManager.active_event = {}
+	PositiveEventManager.total_triggered = 0
+	PositiveEventManager.rare_triggered = 0
+	PositiveEventManager.init_from_settings()
+	assert(str(PositiveEventManager.get_active_event().get("id", "")) == "lucky_season", "Активное событие должно восстановиться")
+	assert(PositiveEventManager.total_triggered == 2, "Статистика событий должна восстановиться")
+	assert(PositiveEventManager.rare_triggered == 1, "Статистика редких событий должна восстановиться")
+	print("  ✔ ТЕСТ 15 УСПЕШНО ПРОЙДЕН!")
+
+	# Возвращаем позитивное событие пользователя.
+	PositiveEventManager.active_event = old_positive_event
+	PositiveEventManager.total_triggered = old_positive_total
+	PositiveEventManager.rare_triggered = old_positive_rare
+	PositiveEventManager.initialized = true
+	PositiveEventManager.save_to_settings()
 
 	# Возвращаем статистику качества пользователя.
 	QualityManager.total_by_grade = old_quality_totals
