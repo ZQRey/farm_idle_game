@@ -10,6 +10,7 @@ const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const MarketManager = preload("res://scripts/MarketManager.gd")
 const VehicleManager = preload("res://scripts/VehicleManager.gd")
 const WorkerManager = preload("res://scripts/WorkerManager.gd")
+const BuildingManager = preload("res://scripts/BuildingManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 
@@ -449,6 +450,59 @@ func _init() -> void:
 	assert(restored_agronomists.size() == 1, "Агроном должен восстановиться после загрузки")
 	assert(int(restored_agronomists[0].get("level", 1)) >= 2, "Уровень агронома должен сохраниться")
 	print("  ✔ ТЕСТ 12 УСПЕШНО ПРОЙДЕН!")
+
+	# 13. Тест: инфраструктура фермы, уровни, эффекты и persistence
+	print("\n[ТЕСТ 13] Проверка инфраструктуры фермы:")
+	var old_building_levels: Dictionary = BuildingManager.levels.duplicate(true)
+	var old_building_invested: int = BuildingManager.total_invested
+	var old_max_fuel: float = GameManager.max_fuel
+
+	BuildingManager.initialized = true
+	BuildingManager.reset_all()
+	GameManager.refresh_infrastructure_effects()
+
+	var base_capacity: float = InventoryManager.get_capacity()
+	var base_fuel_capacity: float = GameManager.max_fuel
+	var base_repair_mult: float = BuildingManager.get_repair_cost_multiplier()
+	var base_growth_mult: float = BuildingManager.get_growth_multiplier()
+	var base_yield_mult: float = BuildingManager.get_yield_multiplier()
+
+	assert(BuildingManager.upgrade("silo"), "Силос должен улучшаться")
+	assert(InventoryManager.get_capacity() >= base_capacity + 1000.0, "Силос должен добавить минимум 1000 кг склада")
+
+	assert(BuildingManager.upgrade("fuel_station"), "АЗС должна улучшаться")
+	GameManager.refresh_infrastructure_effects()
+	assert(GameManager.max_fuel > base_fuel_capacity, "АЗС должна увеличить максимальный запас топлива")
+	assert(BuildingManager.get_fuel_price_multiplier() < 1.0, "АЗС должна снизить стоимость топлива")
+
+	assert(BuildingManager.upgrade("workshop"), "Мастерская должна улучшаться")
+	assert(BuildingManager.upgrade("spare_parts"), "Склад запчастей должен улучшаться")
+	assert(BuildingManager.get_repair_cost_multiplier() < base_repair_mult, "Инфраструктура должна удешевить ремонт")
+	assert(BuildingManager.get_wear_multiplier() < 1.0, "Мастерская должна снижать износ")
+	assert(BuildingManager.get_reliability_bonus() > 0.0, "Запчасти должны повышать надёжность")
+
+	assert(BuildingManager.upgrade("agronomy_lab"), "Лаборатория агронома должна улучшаться")
+	assert(BuildingManager.get_growth_multiplier() > base_growth_mult, "Лаборатория должна ускорять рост")
+	assert(BuildingManager.get_yield_multiplier() > base_yield_mult, "Лаборатория должна повышать урожайность")
+
+	assert(BuildingManager.upgrade("barn_upgrade"), "Расширение амбара должно улучшаться")
+	assert(BuildingManager.get_sale_multiplier() > 1.0, "Расширение амбара должно повышать цену продажи")
+
+	BuildingManager.save_to_settings()
+	BuildingManager.levels = {}
+	BuildingManager.total_invested = 0
+	BuildingManager.init_from_settings()
+	assert(BuildingManager.get_level("silo") == 1, "Уровень силоса должен сохраниться")
+	assert(BuildingManager.get_level("fuel_station") == 1, "Уровень АЗС должен сохраниться")
+	assert(BuildingManager.get_level("agronomy_lab") == 1, "Уровень лаборатории должен сохраниться")
+	print("  ✔ ТЕСТ 13 УСПЕШНО ПРОЙДЕН!")
+
+	# Возвращаем инфраструктуру пользователя.
+	BuildingManager.levels = old_building_levels
+	BuildingManager.total_invested = old_building_invested
+	BuildingManager.initialized = true
+	BuildingManager.save_to_settings()
+	GameManager.max_fuel = old_max_fuel
 
 	# Возвращаем штат пользователя.
 	WorkerManager.workers = old_workers

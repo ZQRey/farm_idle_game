@@ -7,6 +7,7 @@ const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const MarketManager = preload("res://scripts/MarketManager.gd")
 const VehicleManager = preload("res://scripts/VehicleManager.gd")
 const WorkerManager = preload("res://scripts/WorkerManager.gd")
+const BuildingManager = preload("res://scripts/BuildingManager.gd")
 
 signal bankruptcy_declared
 signal season_changed(new_season: Season, season_name: String)
@@ -238,6 +239,8 @@ static func init_from_settings() -> void:
 	truck_condition = float(SettingsManager.config.get_value("durability", "truck_condition", 100.0))
 
 	WorkerManager.init_from_settings()
+	BuildingManager.init_from_settings()
+	refresh_infrastructure_effects()
 	VehicleManager.init_from_settings(
 		{
 			"heavy_tractor": has_heavy_tractor,
@@ -322,6 +325,7 @@ static func save_to_settings() -> void:
 	SettingsManager.config.set_value("game", "has_road_train", has_road_train)
 	VehicleManager.write_to_config()
 	WorkerManager.write_to_config()
+	BuildingManager.write_to_config()
 
 	SettingsManager.config.set_value("mechanics", "fuel_level", fuel_level)
 	SettingsManager.config.set_value("mechanics", "auto_refuel", auto_refuel)
@@ -380,6 +384,7 @@ static func calculate_crop_sale_value(crop_id: String, amount_kg: float) -> int:
 		value *= 1.20
 	if has_windmill:
 		value *= 1.50
+	value *= BuildingManager.get_sale_multiplier()
 	value *= get_season_price_multiplier()
 	value *= MarketManager.get_effective_multiplier(crop_id)
 	return max(0, int(round(value)))
@@ -396,7 +401,17 @@ static func consume_fuel(amount: float) -> bool:
 	save_to_settings()
 	return false
 
-static func refuel(amount: float, cost: int) -> bool:
+static func refresh_infrastructure_effects() -> void:
+	max_fuel = 100.0 + BuildingManager.get_extra_fuel_capacity()
+	fuel_level = min(fuel_level, max_fuel)
+
+static func calculate_refuel_cost(amount: float) -> int:
+	if amount <= 0.0:
+		return 0
+	return max(1, int(ceil(amount * 1.1 * BuildingManager.get_fuel_price_multiplier())))
+
+static func refuel(amount: float, _legacy_cost: int = 0) -> bool:
+	var cost: int = calculate_refuel_cost(amount)
 	if spend_coins(cost):
 		fuel_level = min(max_fuel, fuel_level + amount)
 		total_fuel_spent += cost
@@ -420,10 +435,11 @@ static func _sync_legacy_vehicle_state() -> void:
 
 static func degrade_durability() -> void:
 	# Износ теперь применяется к реально активным экземплярам техники.
-	VehicleManager.add_cycle_usage(VehicleManager.ROLE_TRACTOR, 4.0, 2.5)
-	VehicleManager.add_cycle_usage(VehicleManager.ROLE_TANKER, 2.0, 2.0)
-	VehicleManager.add_cycle_usage(VehicleManager.ROLE_HARVESTER, 5.0, 2.5)
-	VehicleManager.add_cycle_usage(VehicleManager.ROLE_TRUCK, 6.0, 2.0)
+	var wear_mult: float = BuildingManager.get_wear_multiplier()
+	VehicleManager.add_cycle_usage(VehicleManager.ROLE_TRACTOR, 4.0, 2.5 * wear_mult)
+	VehicleManager.add_cycle_usage(VehicleManager.ROLE_TANKER, 2.0, 2.0 * wear_mult)
+	VehicleManager.add_cycle_usage(VehicleManager.ROLE_HARVESTER, 5.0, 2.5 * wear_mult)
+	VehicleManager.add_cycle_usage(VehicleManager.ROLE_TRUCK, 6.0, 2.0 * wear_mult)
 	_sync_legacy_vehicle_state()
 
 	if has_windmill:
@@ -443,8 +459,17 @@ static func get_machinery_average_condition() -> float:
 		return VehicleManager.get_average_active_condition()
 	return (tractor_condition + tanker_condition + harvester_condition + truck_condition) / 4.0
 
+static func get_machinery_repair_cost() -> int:
+	return max(1, int(round(40.0 * BuildingManager.get_repair_cost_multiplier())))
+
+static func get_building_repair_cost() -> int:
+	return max(1, int(round(35.0 * BuildingManager.get_repair_cost_multiplier())))
+
+static func get_emergency_repair_cost() -> int:
+	return max(1, int(round(30.0 * BuildingManager.get_repair_cost_multiplier())))
+
 static func repair_all_machinery() -> bool:
-	var cost: int = 40
+	var cost: int = get_machinery_repair_cost()
 	if spend_coins(cost):
 		if VehicleManager.initialized:
 			VehicleManager.repair_all_owned()
@@ -459,7 +484,7 @@ static func repair_all_machinery() -> bool:
 	return false
 
 static func repair_all_buildings() -> bool:
-	var cost: int = 35
+	var cost: int = get_building_repair_cost()
 	if spend_coins(cost):
 		windmill_condition = 100.0
 		barn_condition = 100.0
@@ -522,6 +547,7 @@ static func harvest_greenhouse() -> int:
 	var data: Dictionary = get_current_greenhouse_data()
 	var seed_c: int = int(data.get("seed_cost", 30)) * greenhouse_count
 	var gross: int = int(data.get("reward", 90)) * greenhouse_count
+	gross = int(round(float(gross) * BuildingManager.get_yield_multiplier()))
 
 	# Учитываем состояние теплицы
 	var condition_mult: float = 1.0 if greenhouse_condition >= 40.0 else 0.7
@@ -589,9 +615,9 @@ static func process_production_costs() -> Dictionary:
 	coins -= salary_payment
 	total_salaries_paid += salary_payment
 
-	if auto_refuel and fuel_level < 25.0:
+	if auto_refuel and fuel_level < max_fuel * 0.25:
 		var needed: float = max_fuel - fuel_level
-		var fuel_cost: int = int(needed * 1.1)
+		var fuel_cost: int = calculate_refuel_cost(needed)
 		if coins >= fuel_cost:
 			coins -= fuel_cost
 			fuel_payment = fuel_cost
@@ -688,6 +714,9 @@ static func declare_bankruptcy() -> void:
 	volunteer_timer = 0.0
 	if WorkerManager.initialized:
 		WorkerManager.reset_to_defaults()
+	if BuildingManager.initialized:
+		BuildingManager.reset_all()
+		refresh_infrastructure_effects()
 
 	# Блокировка платных культур
 	for cid in CROPS:

@@ -438,7 +438,8 @@ func call_mechanic() -> void:
 	if not is_breakdown_active and not GameManager.is_stuck_in_mud:
 		return
 
-	if GameManager.spend_coins(30):
+	var emergency_cost: int = GameManager.get_emergency_repair_cost()
+	if GameManager.spend_coins(emergency_cost):
 		is_repairing = true
 		GameManager.is_repairing = true
 		repair_timer = 0.0

@@ -2,6 +2,7 @@ class_name InventoryManager
 extends RefCounted
 
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
+const BuildingManager = preload("res://scripts/BuildingManager.gd")
 
 const CROP_IDS: Array[String] = ["wheat", "corn", "sunflower", "carrot"]
 const BASE_HARVEST_KG: float = 100.0
@@ -62,7 +63,7 @@ static func save_to_settings() -> void:
 	SettingsManager.save_settings()
 
 static func get_capacity() -> float:
-	return float(CAPACITY_BY_LEVEL.get(storage_level, 500.0))
+	return float(CAPACITY_BY_LEVEL.get(storage_level, 500.0)) + BuildingManager.get_storage_bonus_kg()
 
 static func get_total_stock() -> float:
 	var total: float = 0.0
