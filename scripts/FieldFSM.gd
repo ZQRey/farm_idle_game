@@ -721,7 +721,8 @@ func _start_sowing() -> void:
 
 func _process_sowing(delta: float, speed: float) -> void:
 	if GameManager.has_seeder_tractor:
-		vehicle_x += speed * 1.2 * VehicleManager.get_speed_multiplier(VehicleManager.ROLE_TRACTOR) * delta
+		var operator_mult: float = WorkerManager.get_phase_speed_multiplier("sowing")
+		vehicle_x += speed * 1.2 * VehicleManager.get_speed_multiplier(VehicleManager.ROLE_TRACTOR) * operator_mult * delta
 		vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
 		particles_seed.position = Vector2(vehicle_x + 16, GROUND_Y - 10.0)
 
