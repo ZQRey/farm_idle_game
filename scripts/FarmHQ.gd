@@ -1427,8 +1427,8 @@ func _setup_offline_tab() -> void:
 
 func _format_offline_duration(seconds: int) -> String:
 	var safe: int = max(0, seconds)
-	var hours: int = safe / 3600
-	var minutes: int = (safe % 3600) / 60
+	var hours: int = int(safe / 3600)
+	var minutes: int = int((safe % 3600) / 60)
 	if hours > 0:
 		return "%d ч %02d мин" % [hours, minutes]
 	return "%d мин" % minutes
