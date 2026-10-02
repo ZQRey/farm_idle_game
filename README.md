@@ -185,14 +185,24 @@
 
 ## 🚀 Запуск игры
 
-Проект разработан для **Godot 4.3+ (протестирован на Godot 4.7.2)**:
+Проект разработан для **Godot 4.7.x**. CI release candidate проверяется на Godot 4.7.0:
 
 ```powershell
-& "Godot_v4.7.2-stable_win64_console.exe"
+& "Godot_v4.7-stable_win64_console.exe"
 ```
 или просто откройте проект в редакторе Godot 4 и нажмите `F5`.
 
 ---
+
+## 🚦 Release candidate
+
+Текущая ветка hardening имеет версию **1.0.0-rc.1**.
+
+Перед финальным 1.0.0 используйте:
+- `CHANGELOG.md` — изменения release candidate;
+- `RELEASE_CHECKLIST.md` — ручная Windows/tray/click-through/multi-monitor проверка.
+
+Финальный тег 1.0.0 не рекомендуется ставить до прохождения физического Windows desktop smoke-test.
 
 ## 🛡 Production hardening
 
