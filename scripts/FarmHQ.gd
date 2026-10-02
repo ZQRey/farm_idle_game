@@ -2651,11 +2651,11 @@ func _update_ui() -> void:
 			_apply_feature_purchase_state(btn_buy_gh, "greenhouse", "Купить теплицу (700 🪙)", 700)
 	if lbl_gh_crop_info != null:
 		var gh_data: Dictionary = GameManager.get_current_greenhouse_data()
-		lbl_gh_crop_info.text = "%s: доход +%d 🪙 (семена %d 🪙, созревание %.0f сек)" % [
+		lbl_gh_crop_info.text = "%s: доход +%d 🪙 (семена %d 🪙, созревание %.1f мин)" % [
 			gh_data.get("name", ""),
 			gh_data.get("reward", 0),
 			gh_data.get("seed_cost", 0),
-			gh_data.get("growth_time", 20.0)
+			float(gh_data.get("growth_time", 480.0)) / 60.0
 		]
 
 	# Производство и ТО: Волонтёры
