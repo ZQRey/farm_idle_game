@@ -1275,5 +1275,12 @@ func _init() -> void:
 	assert(cheese_output_value > milk_input_value and cheese_output_value <= milk_input_value * 1.35, "Сыр должен давать контролируемую добавленную стоимость")
 	print("  ✔ ТЕСТ 25 УСПЕШНО ПРОЙДЕН!")
 
+	# 26. Тест: render performance guardrails
+	print("\n[ТЕСТ 26] Проверка render budget:")
+	assert(FieldFSM.CUSTOM_DRAW_FPS >= 8.0, "Custom draw не должен выглядеть дёрганым")
+	assert(FieldFSM.CUSTOM_DRAW_FPS <= 15.0, "Тяжёлый custom draw должен быть ограничен для desktop companion")
+	assert(Engine.max_fps <= 240, "FPS cap не должен выходить за валидированный диапазон")
+	print("  ✔ ТЕСТ 26 УСПЕШНО ПРОЙДЕН!")
+
 	print("\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ! СИСТЕМА ПОЛНОСТЬЮ ИСПРАВНА!")
 	quit(0)
