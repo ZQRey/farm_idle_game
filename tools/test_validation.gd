@@ -15,6 +15,7 @@ const QualityManager = preload("res://scripts/QualityManager.gd")
 const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
 const AchievementManager = preload("res://scripts/AchievementManager.gd")
 const OfflineProgressManager = preload("res://scripts/OfflineProgressManager.gd")
+const LivestockManager = preload("res://scripts/LivestockManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 
@@ -744,6 +745,103 @@ func _init() -> void:
 	PositiveEventManager.rare_triggered = old_positive_rare_for_offline
 	PositiveEventManager.initialized = true
 	PositiveEventManager.save_to_settings()
+
+	# 18. Тест: животноводство, кормовые цепочки, продукция и persistence
+	print("\n[ТЕСТ 18] Проверка животноводства:")
+	var old_livestock_state: Dictionary = {
+		"coop_level": LivestockManager.coop_level,
+		"barn_level": LivestockManager.barn_level,
+		"chickens": LivestockManager.chickens,
+		"cows": LivestockManager.cows,
+		"eggs": LivestockManager.eggs,
+		"milk_l": LivestockManager.milk_l,
+		"auto_sell_products": LivestockManager.auto_sell_products,
+		"total_eggs_produced": LivestockManager.total_eggs_produced,
+		"total_milk_produced": LivestockManager.total_milk_produced,
+		"total_product_coins": LivestockManager.total_product_coins,
+		"last_tick_at": LivestockManager.last_tick_at
+	}
+	var old_livestock_coins: int = GameManager.coins
+	var old_livestock_stock: Dictionary = InventoryManager.stock.duplicate(true)
+	var old_livestock_quality_stock: Dictionary = InventoryManager.quality_stock.duplicate(true)
+
+	LivestockManager.initialized = true
+	LivestockManager.coop_level = 1
+	LivestockManager.barn_level = 1
+	LivestockManager.chickens = 2
+	LivestockManager.cows = 1
+	LivestockManager.eggs = 0.0
+	LivestockManager.milk_l = 0.0
+	LivestockManager.auto_sell_products = false
+	LivestockManager.total_eggs_produced = 0.0
+	LivestockManager.total_milk_produced = 0.0
+	LivestockManager.total_product_coins = 0
+
+	InventoryManager.stock = {
+		"wheat": 100.0,
+		"corn": 100.0,
+		"sunflower": 0.0,
+		"carrot": 0.0
+	}
+	InventoryManager.quality_stock = {
+		"wheat": {"C": 0.0, "B": 100.0, "A": 0.0, "S": 0.0},
+		"corn": {"C": 0.0, "B": 100.0, "A": 0.0, "S": 0.0},
+		"sunflower": {"C": 0.0, "B": 0.0, "A": 0.0, "S": 0.0},
+		"carrot": {"C": 0.0, "B": 0.0, "A": 0.0, "S": 0.0}
+	}
+	var wheat_before: float = InventoryManager.get_stock("wheat")
+	var corn_before: float = InventoryManager.get_stock("corn")
+	var livestock_report: Dictionary = LivestockManager.process_ticks(1)
+	assert(float(livestock_report.get("eggs", 0.0)) == 6.0, "2 курицы должны произвести 6 яиц за тик")
+	assert(float(livestock_report.get("milk_l", 0.0)) == 5.0, "1 корова должна произвести 5 л молока за тик")
+	assert(InventoryManager.get_stock("wheat") < wheat_before, "Животные должны расходовать пшеницу")
+	assert(InventoryManager.get_stock("corn") < corn_before, "Животные должны расходовать кукурузу")
+	assert(LivestockManager.eggs == 6.0, "Яйца должны храниться на livestock-складе")
+	assert(LivestockManager.milk_l == 5.0, "Молоко должно храниться на livestock-складе")
+
+	var coins_before_products: int = GameManager.coins
+	var livestock_sale: int = LivestockManager.sell_all_products()
+	assert(livestock_sale > 0, "Продажа продукции должна приносить монеты")
+	assert(GameManager.coins > coins_before_products, "Казна должна увеличиться после продажи продукции")
+	assert(LivestockManager.eggs == 0.0 and LivestockManager.milk_l == 0.0, "После продажи склад продукции должен очиститься")
+
+	LivestockManager.coop_level = 2
+	LivestockManager.barn_level = 1
+	LivestockManager.chickens = 3
+	LivestockManager.cows = 1
+	LivestockManager.auto_sell_products = true
+	LivestockManager.save_to_settings()
+	LivestockManager.coop_level = 0
+	LivestockManager.barn_level = 0
+	LivestockManager.chickens = 0
+	LivestockManager.cows = 0
+	LivestockManager.auto_sell_products = false
+	LivestockManager.init_from_settings()
+	assert(LivestockManager.coop_level == 2, "Уровень курятника должен сохраниться")
+	assert(LivestockManager.barn_level == 1, "Уровень коровника должен сохраниться")
+	assert(LivestockManager.chickens == 3, "Количество кур должно сохраниться")
+	assert(LivestockManager.cows == 1, "Количество коров должно сохраниться")
+	assert(LivestockManager.auto_sell_products, "Режим автопродажи должен сохраниться")
+	print("  ✔ ТЕСТ 18 УСПЕШНО ПРОЙДЕН!")
+
+	LivestockManager.coop_level = int(old_livestock_state["coop_level"])
+	LivestockManager.barn_level = int(old_livestock_state["barn_level"])
+	LivestockManager.chickens = int(old_livestock_state["chickens"])
+	LivestockManager.cows = int(old_livestock_state["cows"])
+	LivestockManager.eggs = float(old_livestock_state["eggs"])
+	LivestockManager.milk_l = float(old_livestock_state["milk_l"])
+	LivestockManager.auto_sell_products = bool(old_livestock_state["auto_sell_products"])
+	LivestockManager.total_eggs_produced = float(old_livestock_state["total_eggs_produced"])
+	LivestockManager.total_milk_produced = float(old_livestock_state["total_milk_produced"])
+	LivestockManager.total_product_coins = int(old_livestock_state["total_product_coins"])
+	LivestockManager.last_tick_at = int(old_livestock_state["last_tick_at"])
+	LivestockManager.initialized = true
+	LivestockManager.save_to_settings()
+	GameManager.coins = old_livestock_coins
+	InventoryManager.stock = old_livestock_stock
+	InventoryManager.quality_stock = old_livestock_quality_stock
+	InventoryManager.save_to_settings()
+	GameManager.save_to_settings()
 
 	print("\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ! СИСТЕМА ПОЛНОСТЬЮ ИСПРАВНА!")
 	quit(0)

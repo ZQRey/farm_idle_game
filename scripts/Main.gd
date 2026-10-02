@@ -13,6 +13,7 @@ const QualityManager = preload("res://scripts/QualityManager.gd")
 const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
 const AchievementManager = preload("res://scripts/AchievementManager.gd")
 const OfflineProgressManager = preload("res://scripts/OfflineProgressManager.gd")
+const LivestockManager = preload("res://scripts/LivestockManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 const FarmHQ = preload("res://scripts/FarmHQ.gd")
@@ -36,13 +37,25 @@ func _ready() -> void:
 	if GameManager.has_barn:
 		InventoryManager.ensure_minimum_level(2)
 	MarketManager.init_from_settings()
+	LivestockManager.init_from_settings()
 	var offline_report: Dictionary = OfflineProgressManager.init_and_apply()
+	var livestock_offline: Dictionary = LivestockManager.process_offline_seconds(
+		int(offline_report.get("credited_seconds", 0)),
+		OfflineProgressManager.OFFLINE_EFFICIENCY
+	)
 	AchievementManager.init_from_settings()
 	if int(offline_report.get("cycles_completed", 0)) > 0:
 		print("[Offline] %d циклов | %.0f кг | %+d 🪙" % [
 			int(offline_report.get("cycles_completed", 0)),
 			float(offline_report.get("harvested_kg", 0.0)),
 			int(offline_report.get("net_coins", 0))
+		])
+	if int(livestock_offline.get("ticks", 0)) > 0:
+		print("[Livestock Offline] %d тиков | %.0f яиц | %.0f л молока | %+d 🪙" % [
+			int(livestock_offline.get("ticks", 0)),
+			float(livestock_offline.get("eggs", 0.0)),
+			float(livestock_offline.get("milk_l", 0.0)),
+			int(livestock_offline.get("coins", 0))
 		])
 	_record_market_prices()
 	_process_market_auto_sales()
@@ -124,7 +137,14 @@ func _ready() -> void:
 	autosave_timer.timeout.connect(save_all_state)
 	add_child(autosave_timer)
 
-	# 10. Рыночный цикл: проверка цены и правил автопродажи каждые 15 секунд.
+	# 10. Животноводство: проверяем готовность производственного тика каждые 30 секунд.
+	var livestock_timer: Timer = Timer.new()
+	livestock_timer.wait_time = 30.0
+	livestock_timer.autostart = true
+	livestock_timer.timeout.connect(_on_livestock_timer)
+	add_child(livestock_timer)
+
+	# 11. Рыночный цикл: проверка цены и правил автопродажи каждые 15 секунд.
 	var market_timer: Timer = Timer.new()
 	market_timer.wait_time = 15.0
 	market_timer.autostart = true
@@ -169,6 +189,12 @@ func _on_harvest_completed(_coins_earned: int) -> void:
 	_process_market_auto_sales()
 	_check_achievements()
 	farm_hq._update_ui()
+
+func _on_livestock_timer() -> void:
+	var report: Dictionary = LivestockManager.process_due_ticks()
+	if int(report.get("ticks", 0)) > 0:
+		_check_achievements()
+		farm_hq._update_ui()
 
 func _on_market_timer() -> void:
 	var market_changed: bool = MarketManager.update_market(false)
@@ -252,6 +278,7 @@ func _on_bankruptcy_requested() -> void:
 	InventoryManager.reset_all()
 	MarketManager.reset_all()
 	QualityManager.reset_all()
+	LivestockManager.reset_all()
 	farm_hq._refresh_contracts_ui()
 	farm_hq._refresh_storage_ui()
 	farm_hq._refresh_market_ui()
@@ -284,6 +311,7 @@ func save_all_state() -> void:
 	PositiveEventManager.save_to_settings()
 	AchievementManager.save_to_settings()
 	OfflineProgressManager.save_to_settings()
+	LivestockManager.save_to_settings()
 	if field != null:
 		field.save_field_state()
 	if event_manager != null:
