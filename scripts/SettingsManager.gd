@@ -35,9 +35,11 @@ static func load_settings() -> void:
 	flush_pending(true)
 
 static func save_settings(force: bool = false) -> void:
+	# Менеджеры только помечают in-memory ConfigFile dirty.
+	# Физическая запись выполняется централизованным autosave / quit flush.
 	_dirty = true
-	if force or _can_write_now():
-		flush_pending(force)
+	if force:
+		flush_pending(true)
 
 static func flush_pending(force: bool = false) -> bool:
 	if not _dirty and not force:
