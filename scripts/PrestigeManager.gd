@@ -3,10 +3,6 @@ extends RefCounted
 
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
-const SpecializationManager = preload("res://scripts/SpecializationManager.gd")
-const MultiFieldManager = preload("res://scripts/MultiFieldManager.gd")
-const LivestockManager = preload("res://scripts/LivestockManager.gd")
-const ProcessingManager = preload("res://scripts/ProcessingManager.gd")
 
 const MAX_PRESTIGE_RANK: int = 10
 
@@ -38,16 +34,14 @@ static func can_prestige() -> bool:
 		return false
 	if ProgressionManager.farm_level < ProgressionManager.MAX_LEVEL:
 		return false
-	if SpecializationManager.unlocked_tier < SpecializationManager.MAX_TIER:
+	if _get_specialization_tier() < 3:
 		return false
-	if not MultiFieldManager.is_unlocked("field_2") or not MultiFieldManager.is_unlocked("field_3"):
+	if not _is_field_unlocked("field_2") or not _is_field_unlocked("field_3"):
 		return false
-	if LivestockManager.coop_level < LivestockManager.MAX_BUILDING_LEVEL:
+	if _get_livestock_level("coop_level") < 3 or _get_livestock_level("barn_level") < 3:
 		return false
-	if LivestockManager.barn_level < LivestockManager.MAX_BUILDING_LEVEL:
-		return false
-	for facility_id in ProcessingManager.FACILITY_ORDER:
-		if ProcessingManager.get_facility_level(facility_id) < 2:
+	for facility_id in ["flour_mill", "oil_press", "dairy"]:
+		if _get_processing_level(facility_id) < 2:
 			return false
 	return true
 
@@ -57,21 +51,45 @@ static func get_missing_requirements() -> Array[String]:
 		missing.append("Достигнут максимальный Prestige %d" % MAX_PRESTIGE_RANK)
 	if ProgressionManager.farm_level < ProgressionManager.MAX_LEVEL:
 		missing.append("Ферма: уровень %d/%d" % [ProgressionManager.farm_level, ProgressionManager.MAX_LEVEL])
-	if SpecializationManager.unlocked_tier < SpecializationManager.MAX_TIER:
-		missing.append("Специализация: %d/%d" % [SpecializationManager.unlocked_tier, SpecializationManager.MAX_TIER])
-	if not MultiFieldManager.is_unlocked("field_2"):
+	var spec_tier: int = _get_specialization_tier()
+	if spec_tier < 3:
+		missing.append("Специализация: %d/3" % spec_tier)
+	if not _is_field_unlocked("field_2"):
 		missing.append("Открыть Северный участок")
-	if not MultiFieldManager.is_unlocked("field_3"):
+	if not _is_field_unlocked("field_3"):
 		missing.append("Открыть Дальний участок")
-	if LivestockManager.coop_level < LivestockManager.MAX_BUILDING_LEVEL:
+	if _get_livestock_level("coop_level") < 3:
 		missing.append("Курятник MAX")
-	if LivestockManager.barn_level < LivestockManager.MAX_BUILDING_LEVEL:
+	if _get_livestock_level("barn_level") < 3:
 		missing.append("Коровник MAX")
-	for facility_id in ProcessingManager.FACILITY_ORDER:
-		if ProcessingManager.get_facility_level(facility_id) < 2:
-			var info: Dictionary = ProcessingManager.FACILITIES[facility_id]
-			missing.append("%s минимум ур. 2" % str(info.get("name", facility_id)))
+	var names: Dictionary = {
+		"flour_mill": "Мукомольный цех",
+		"oil_press": "Маслопресс",
+		"dairy": "Молочный цех"
+	}
+	for facility_id in ["flour_mill", "oil_press", "dairy"]:
+		if _get_processing_level(facility_id) < 2:
+			missing.append("%s минимум ур. 2" % str(names[facility_id]))
 	return missing
+
+static func _get_specialization_tier() -> int:
+	return clampi(int(SettingsManager.config.get_value("specialization", "unlocked_tier", 0)), 0, 3)
+
+static func _is_field_unlocked(field_id: String) -> bool:
+	var saved: Variant = SettingsManager.config.get_value("multi_fields", "fields", {})
+	if typeof(saved) != TYPE_DICTIONARY or not saved.has(field_id):
+		return false
+	var field: Variant = saved[field_id]
+	return typeof(field) == TYPE_DICTIONARY and bool(field.get("unlocked", false))
+
+static func _get_livestock_level(key: String) -> int:
+	return clampi(int(SettingsManager.config.get_value("livestock", key, 0)), 0, 3)
+
+static func _get_processing_level(facility_id: String) -> int:
+	var saved: Variant = SettingsManager.config.get_value("processing", "facility_levels", {})
+	if typeof(saved) != TYPE_DICTIONARY:
+		return 0
+	return clampi(int(saved.get(facility_id, 0)), 0, 3)
 
 static func award_prestige() -> bool:
 	if not can_prestige():
