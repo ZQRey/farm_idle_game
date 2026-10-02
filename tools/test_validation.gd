@@ -13,6 +13,7 @@ const WorkerManager = preload("res://scripts/WorkerManager.gd")
 const BuildingManager = preload("res://scripts/BuildingManager.gd")
 const QualityManager = preload("res://scripts/QualityManager.gd")
 const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
+const AchievementManager = preload("res://scripts/AchievementManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 
@@ -617,6 +618,79 @@ func _init() -> void:
 	VehicleManager.save_to_settings()
 	GameManager._sync_legacy_vehicle_state()
 	GameManager.save_to_settings()
+
+	# 16. Тест: достижения, косметические титулы и persistence
+	print("\n[ТЕСТ 16] Проверка достижений:")
+	var old_achievement_unlocked: Array[String] = AchievementManager.unlocked.duplicate()
+	var old_achievement_times: Dictionary = AchievementManager.unlocked_at.duplicate(true)
+	var old_achievement_title: String = AchievementManager.active_title
+	var old_achievement_points: int = AchievementManager.total_points
+	var ach_old_harvests: int = GameManager.total_harvested
+	var ach_old_coins: int = GameManager.total_coins_earned
+	var ach_old_farm_level: int = ProgressionManager.farm_level
+	var ach_old_reputation: int = ProgressionManager.reputation
+	var ach_old_contracts: int = ContractManager.total_completed
+	var ach_old_quality_s: float = QualityManager.get_total_kg_for_grade("S")
+	var ach_old_rare: int = PositiveEventManager.rare_triggered
+
+	AchievementManager.initialized = true
+	AchievementManager.unlocked = []
+	AchievementManager.unlocked_at = {}
+	AchievementManager.active_title = "Фермер"
+	AchievementManager.total_points = 0
+
+	GameManager.total_harvested = 100
+	GameManager.total_coins_earned = 10000
+	ProgressionManager.farm_level = max(10, ProgressionManager.farm_level)
+	ProgressionManager.reputation = max(60, ProgressionManager.reputation)
+	ContractManager.total_completed = max(10, ContractManager.total_completed)
+	QualityManager.total_by_grade["S"] = max(100.0, QualityManager.get_total_kg_for_grade("S"))
+	PositiveEventManager.rare_triggered = max(3, PositiveEventManager.rare_triggered)
+
+	var unlocked_now: Array[Dictionary] = AchievementManager.evaluate_all()
+	assert(not unlocked_now.is_empty(), "Должны автоматически открыться достижения")
+	assert(AchievementManager.is_unlocked("first_harvest"), "Первый урожай должен быть открыт")
+	assert(AchievementManager.is_unlocked("harvest_100"), "100 урожаев должны быть открыты")
+	assert(AchievementManager.is_unlocked("farm_level_10"), "10 уровень фермы должен быть открыт")
+	assert(AchievementManager.is_unlocked("contracts_10"), "10 контрактов должны быть открыты")
+	assert(AchievementManager.is_unlocked("quality_s_100"), "100 кг S-класса должны быть открыты")
+	assert(AchievementManager.is_unlocked("rare_events_3"), "3 редких события должны быть открыты")
+	assert(AchievementManager.is_unlocked("coins_10000"), "10 000 заработанных монет должны быть открыты")
+	assert(AchievementManager.total_points > 0, "За достижения должны начисляться achievement points")
+	assert(AchievementManager.get_available_titles().has("Хозяин полей"), "Титул «Хозяин полей» должен быть доступен")
+	assert(AchievementManager.set_active_title("Хозяин полей"), "Открытый титул должен выбираться")
+
+	AchievementManager.save_to_settings()
+	AchievementManager.unlocked = []
+	AchievementManager.unlocked_at = {}
+	AchievementManager.active_title = "Фермер"
+	AchievementManager.total_points = 0
+	AchievementManager.init_from_settings()
+	assert(AchievementManager.is_unlocked("harvest_100"), "Достижение должно восстановиться")
+	assert(AchievementManager.active_title == "Хозяин полей", "Выбранный титул должен сохраниться")
+	print("  ✔ ТЕСТ 16 УСПЕШНО ПРОЙДЕН!")
+
+	# Возвращаем пользовательские значения после теста достижений.
+	GameManager.total_harvested = ach_old_harvests
+	GameManager.total_coins_earned = ach_old_coins
+	ProgressionManager.farm_level = ach_old_farm_level
+	ProgressionManager.reputation = ach_old_reputation
+	ContractManager.total_completed = ach_old_contracts
+	QualityManager.total_by_grade["S"] = ach_old_quality_s
+	PositiveEventManager.rare_triggered = ach_old_rare
+	AchievementManager.unlocked = old_achievement_unlocked
+	AchievementManager.unlocked_at = old_achievement_times
+	AchievementManager.active_title = old_achievement_title
+	AchievementManager.total_points = old_achievement_points
+	AchievementManager.initialized = true
+	AchievementManager.save_to_settings()
+	GameManager.save_to_settings()
+	ProgressionManager.save_to_settings()
+	ContractManager.save_to_settings()
+	QualityManager.save_to_settings()
+	PositiveEventManager.save_to_settings()
+	assert(int(SettingsManager.config.get_value("statistics", "total_harvested", -1)) == ach_old_harvests, "Lifetime-статистика урожаев должна persistиться")
+	assert(int(SettingsManager.config.get_value("statistics", "total_coins_earned", -1)) == ach_old_coins, "Lifetime-статистика монет должна persistиться")
 
 	print("\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ! СИСТЕМА ПОЛНОСТЬЮ ИСПРАВНА!")
 	quit(0)

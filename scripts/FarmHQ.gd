@@ -11,6 +11,7 @@ const WorkerManager = preload("res://scripts/WorkerManager.gd")
 const BuildingManager = preload("res://scripts/BuildingManager.gd")
 const QualityManager = preload("res://scripts/QualityManager.gd")
 const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
+const AchievementManager = preload("res://scripts/AchievementManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 
@@ -60,6 +61,9 @@ var buildings_container: VBoxContainer
 
 # Позитивные события (динамическая вкладка)
 var positive_events_container: VBoxContainer
+
+# Достижения (динамическая вкладка)
+var achievements_container: VBoxContainer
 
 # Магазин семян
 @onready var seed_container: VBoxContainer = $VBox/TabContainer/Магазин/ScrollSeeds/VBoxSeeds
@@ -157,6 +161,7 @@ func _ready() -> void:
 	_setup_workers_tab()
 	_setup_buildings_tab()
 	_setup_positive_events_tab()
+	_setup_achievements_tab()
 	_setup_monitors_list()
 	_setup_graphics_and_fps()
 	_setup_garage_and_decor()
@@ -1272,6 +1277,127 @@ func _refresh_positive_events_ui() -> void:
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	positive_events_container.add_child(note)
 
+func _setup_achievements_tab() -> void:
+	if achievements_container != null:
+		return
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.name = "Достижения"
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	tab_container.add_child(margin)
+
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
+
+	achievements_container = VBoxContainer.new()
+	achievements_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	achievements_container.add_theme_constant_override("separation", 10)
+	scroll.add_child(achievements_container)
+
+func _refresh_achievements_ui() -> void:
+	if achievements_container == null:
+		return
+
+	for child in achievements_container.get_children():
+		child.queue_free()
+
+	if not AchievementManager.initialized:
+		var loading: Label = Label.new()
+		loading.text = "🏆 Достижения загружаются..."
+		achievements_container.add_child(loading)
+		return
+
+	AchievementManager.evaluate_all()
+
+	var title: Label = Label.new()
+	title.add_theme_font_size_override("font_size", 16)
+	title.text = "🏆 Достижения — %d/%d | %d очков" % [
+		AchievementManager.get_unlocked_count(),
+		AchievementManager.ACHIEVEMENT_ORDER.size(),
+		AchievementManager.total_points
+	]
+	achievements_container.add_child(title)
+
+	var title_row: HBoxContainer = HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", 8)
+	achievements_container.add_child(title_row)
+
+	var title_label: Label = Label.new()
+	title_label.text = "Косметический титул:"
+	title_row.add_child(title_label)
+
+	var title_select: OptionButton = OptionButton.new()
+	title_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var titles: Array[String] = AchievementManager.get_available_titles()
+	var selected_idx: int = 0
+	for i in range(titles.size()):
+		title_select.add_item(titles[i], i)
+		title_select.set_item_metadata(i, titles[i])
+		if titles[i] == AchievementManager.active_title:
+			selected_idx = i
+	title_select.selected = selected_idx
+	title_select.item_selected.connect(func(index: int):
+		var selected_title: String = str(title_select.get_item_metadata(index))
+		if AchievementManager.set_active_title(selected_title):
+			_update_ui()
+	)
+	title_row.add_child(title_select)
+
+	var note: Label = Label.new()
+	note.text = "Награды за достижения преимущественно косметические: титулы и значки. Экономические множители не выдаются."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	achievements_container.add_child(note)
+
+	for achievement_id in AchievementManager.ACHIEVEMENT_ORDER:
+		var definition: Dictionary = AchievementManager.ACHIEVEMENTS[achievement_id]
+		var progress: Dictionary = AchievementManager.get_progress(achievement_id)
+		var is_unlocked: bool = bool(progress.get("unlocked", false))
+
+		var panel: PanelContainer = PanelContainer.new()
+		var vbox: VBoxContainer = VBoxContainer.new()
+		vbox.add_theme_constant_override("separation", 4)
+		panel.add_child(vbox)
+
+		var achievement_title: Label = Label.new()
+		achievement_title.add_theme_font_size_override("font_size", 14)
+		achievement_title.text = "%s %s%s" % [
+			str(definition.get("icon", "🏆")),
+			str(definition.get("title", achievement_id)),
+			" ✔" if is_unlocked else ""
+		]
+		vbox.add_child(achievement_title)
+
+		var description: Label = Label.new()
+		description.text = str(definition.get("description", ""))
+		description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		vbox.add_child(description)
+
+		var current: float = float(progress.get("current", 0.0))
+		var target: float = float(progress.get("target", 1.0))
+		var bar: ProgressBar = ProgressBar.new()
+		bar.min_value = 0.0
+		bar.max_value = max(1.0, target)
+		bar.value = min(current, target)
+		bar.show_percentage = false
+		bar.custom_minimum_size = Vector2(300, 16)
+		vbox.add_child(bar)
+
+		var footer: Label = Label.new()
+		footer.text = "Прогресс: %.0f / %.0f | +%d очков | титул «%s»" % [
+			current,
+			target,
+			int(definition.get("points", 0)),
+			str(definition.get("reward_title", ""))
+		]
+		vbox.add_child(footer)
+
+		achievements_container.add_child(panel)
+
 func _setup_repair_buttons() -> void:
 	var do_repair = func():
 		repair_requested.emit()
@@ -1294,6 +1420,7 @@ func _update_ui() -> void:
 	_refresh_workers_ui()
 	_refresh_buildings_ui()
 	_refresh_positive_events_ui()
+	_refresh_achievements_ui()
 
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins
@@ -1301,7 +1428,12 @@ func _update_ui() -> void:
 	if lbl_farm_level != null:
 		lbl_farm_level.text = "⭐ Ферма: ур. %d / %d" % [ProgressionManager.farm_level, ProgressionManager.MAX_LEVEL]
 	if lbl_reputation != null:
-		lbl_reputation.text = "🏅 Репутация: %d — %s" % [ProgressionManager.reputation, ProgressionManager.get_reputation_title()]
+		var cosmetic_title: String = AchievementManager.active_title if AchievementManager.initialized else "Фермер"
+		lbl_reputation.text = "🏅 %s | Репутация: %d — %s" % [
+			cosmetic_title,
+			ProgressionManager.reputation,
+			ProgressionManager.get_reputation_title()
+		]
 	if xp_bar != null and lbl_xp_progress != null:
 		var xp_required: int = ProgressionManager.get_xp_required_for_current_level()
 		if ProgressionManager.farm_level >= ProgressionManager.MAX_LEVEL:

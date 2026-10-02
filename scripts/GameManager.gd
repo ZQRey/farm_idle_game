@@ -154,7 +154,7 @@ static var is_repairing: bool = false
 static var is_strike_active: bool = false
 static var is_police_active: bool = false
 
-# Статистика сессии
+# Долгосрочная статистика фермы (persisted)
 static var total_harvested: int = 0
 static var total_coins_earned: int = 0
 static var total_strikes_resolved: int = 0
@@ -260,6 +260,17 @@ static func init_from_settings() -> void:
 	QualityManager.init_from_settings()
 	PositiveEventManager.init_from_settings()
 
+	# Долгосрочная статистика. Старые save без секции автоматически получают нули.
+	total_harvested = max(0, int(SettingsManager.config.get_value("statistics", "total_harvested", 0)))
+	total_coins_earned = max(0, int(SettingsManager.config.get_value("statistics", "total_coins_earned", 0)))
+	total_strikes_resolved = max(0, int(SettingsManager.config.get_value("statistics", "total_strikes_resolved", 0)))
+	total_repairs_done = max(0, int(SettingsManager.config.get_value("statistics", "total_repairs_done", 0)))
+	total_bankruptcies = max(0, int(SettingsManager.config.get_value("statistics", "total_bankruptcies", SettingsManager.config.get_value("finances", "total_bankruptcies", 0))))
+	total_salaries_paid = max(0, int(SettingsManager.config.get_value("statistics", "total_salaries_paid", 0)))
+	total_fuel_spent = max(0, int(SettingsManager.config.get_value("statistics", "total_fuel_spent", 0)))
+	total_greenhouse_earned = max(0, int(SettingsManager.config.get_value("statistics", "total_greenhouse_earned", 0)))
+	total_fines_paid = max(0, int(SettingsManager.config.get_value("statistics", "total_fines_paid", 0)))
+
 	windmill_condition = float(SettingsManager.config.get_value("durability", "windmill_condition", 100.0))
 	barn_condition = float(SettingsManager.config.get_value("durability", "barn_condition", 100.0))
 	canopy_condition = float(SettingsManager.config.get_value("durability", "canopy_condition", 100.0))
@@ -354,7 +365,17 @@ static func save_to_settings() -> void:
 
 	SettingsManager.config.set_value("finances", "subsidy_debt", subsidy_debt)
 	SettingsManager.config.set_value("finances", "loan_debt", loan_debt)
+	# Legacy key сохраняем для обратной совместимости, но каноническая статистика ниже.
 	SettingsManager.config.set_value("finances", "total_bankruptcies", total_bankruptcies)
+	SettingsManager.config.set_value("statistics", "total_harvested", total_harvested)
+	SettingsManager.config.set_value("statistics", "total_coins_earned", total_coins_earned)
+	SettingsManager.config.set_value("statistics", "total_strikes_resolved", total_strikes_resolved)
+	SettingsManager.config.set_value("statistics", "total_repairs_done", total_repairs_done)
+	SettingsManager.config.set_value("statistics", "total_bankruptcies", total_bankruptcies)
+	SettingsManager.config.set_value("statistics", "total_salaries_paid", total_salaries_paid)
+	SettingsManager.config.set_value("statistics", "total_fuel_spent", total_fuel_spent)
+	SettingsManager.config.set_value("statistics", "total_greenhouse_earned", total_greenhouse_earned)
+	SettingsManager.config.set_value("statistics", "total_fines_paid", total_fines_paid)
 
 	var unlocked_list: Array[String] = []
 	for cid in CROPS:
