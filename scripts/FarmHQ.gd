@@ -14,6 +14,7 @@ const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
 const AchievementManager = preload("res://scripts/AchievementManager.gd")
 const OfflineProgressManager = preload("res://scripts/OfflineProgressManager.gd")
 const LivestockManager = preload("res://scripts/LivestockManager.gd")
+const ProcessingManager = preload("res://scripts/ProcessingManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 
@@ -72,6 +73,9 @@ var offline_container: VBoxContainer
 
 # Животноводство (динамическая вкладка)
 var livestock_container: VBoxContainer
+
+# Переработка (динамическая вкладка)
+var processing_container: VBoxContainer
 
 # Магазин семян
 @onready var seed_container: VBoxContainer = $VBox/TabContainer/Магазин/ScrollSeeds/VBoxSeeds
@@ -172,6 +176,7 @@ func _ready() -> void:
 	_setup_achievements_tab()
 	_setup_offline_tab()
 	_setup_livestock_tab()
+	_setup_processing_tab()
 	_setup_monitors_list()
 	_setup_graphics_and_fps()
 	_setup_garage_and_decor()
@@ -1722,6 +1727,190 @@ func _refresh_livestock_ui() -> void:
 	feed_status.text = "Кормовые цепочки: курятник — %s; коровник — %s." % [chicken_status, cow_status]
 	livestock_container.add_child(feed_status)
 
+func _setup_processing_tab() -> void:
+	if processing_container != null:
+		return
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.name = "Переработка"
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	tab_container.add_child(margin)
+
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
+
+	processing_container = VBoxContainer.new()
+	processing_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	processing_container.add_theme_constant_override("separation", 10)
+	scroll.add_child(processing_container)
+
+func _processing_feature_id(facility_id: String) -> String:
+	match facility_id:
+		"flour_mill":
+			return "flour_mill"
+		"oil_press":
+			return "oil_press"
+		"dairy":
+			return "dairy_processing"
+	return facility_id
+
+func _processing_input_text(facility_id: String) -> String:
+	var info: Dictionary = ProcessingManager.FACILITIES.get(facility_id, {})
+	var input_kind: String = str(info.get("input_kind", "crop"))
+	var input_id: String = str(info.get("input_id", ""))
+	if input_kind == "crop":
+		return "Сырьё сейчас: %.0f кг" % InventoryManager.get_stock(input_id)
+	if input_kind == "livestock" and input_id == "milk":
+		return "Сырьё сейчас: %.1f л молока" % LivestockManager.milk_l
+	return "Сырьё недоступно"
+
+func _refresh_processing_ui() -> void:
+	if processing_container == null:
+		return
+
+	for child in processing_container.get_children():
+		child.queue_free()
+
+	if not ProcessingManager.initialized:
+		var loading: Label = Label.new()
+		loading.text = "🏭 Переработка загружается..."
+		processing_container.add_child(loading)
+		return
+
+	var title: Label = Label.new()
+	title.add_theme_font_size_override("font_size", 16)
+	title.text = "🏭 Переработка продукции"
+	processing_container.add_child(title)
+
+	var summary: Label = Label.new()
+	summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	summary.text = "Производственный тик: каждые %d мин. Каждый уровень цеха выполняет ещё одну партию за тик. Всего партий: %d | заработано: %d 🪙." % [
+		int(ProcessingManager.TICK_SECONDS / 60),
+		ProcessingManager.total_batches,
+		ProcessingManager.total_product_coins
+	]
+	processing_container.add_child(summary)
+
+	var dairy_note: Label = Label.new()
+	dairy_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dairy_note.text = "🥛 Для производства сыра молоко должно оставаться на складе животноводства. Если включена автопродажа яиц и молока, отключите её во вкладке «Животноводство»."
+	processing_container.add_child(dairy_note)
+
+	var auto_sell: CheckBox = CheckBox.new()
+	auto_sell.text = "Автоматически продавать готовую продукцию после тика"
+	auto_sell.button_pressed = ProcessingManager.auto_sell_products
+	auto_sell.toggled.connect(func(enabled: bool):
+		ProcessingManager.set_auto_sell(enabled)
+		_update_ui()
+	)
+	processing_container.add_child(auto_sell)
+
+	for facility_id in ProcessingManager.FACILITY_ORDER:
+		var info: Dictionary = ProcessingManager.FACILITIES[facility_id]
+		var level: int = ProcessingManager.get_facility_level(facility_id)
+		var panel: PanelContainer = PanelContainer.new()
+		var box: VBoxContainer = VBoxContainer.new()
+		box.add_theme_constant_override("separation", 5)
+		panel.add_child(box)
+
+		var facility_title: Label = Label.new()
+		facility_title.add_theme_font_size_override("font_size", 15)
+		facility_title.text = "%s %s — ур. %d/%d" % [
+			str(info.get("icon", "🏭")),
+			str(info.get("name", facility_id)),
+			level,
+			ProcessingManager.MAX_LEVEL
+		]
+		box.add_child(facility_title)
+
+		var recipe: Label = Label.new()
+		recipe.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		recipe.text = "%s | %s | партий за тик: %d" % [
+			str(info.get("description", "")),
+			_processing_input_text(facility_id),
+			level
+		]
+		box.add_child(recipe)
+
+		var actions: HBoxContainer = HBoxContainer.new()
+		actions.add_theme_constant_override("separation", 8)
+		box.add_child(actions)
+
+		var upgrade: Button = Button.new()
+		var feature_id: String = _processing_feature_id(facility_id)
+		var required_level: int = ProgressionManager.get_feature_required_level(feature_id)
+		if not ProgressionManager.can_access_feature(feature_id):
+			upgrade.text = "🔒 Открывается с ур. %d" % required_level
+			upgrade.disabled = true
+		elif level >= ProcessingManager.MAX_LEVEL:
+			upgrade.text = "MAX ✔"
+			upgrade.disabled = true
+		else:
+			var upgrade_cost: int = ProcessingManager.get_upgrade_cost(facility_id)
+			upgrade.text = "Построить / улучшить (%d 🪙)" % upgrade_cost
+			upgrade.disabled = GameManager.coins < upgrade_cost
+			var fid: String = facility_id
+			upgrade.pressed.connect(func(target_id: String = fid):
+				if ProcessingManager.upgrade_facility(target_id):
+					_update_ui()
+			)
+		actions.add_child(upgrade)
+
+		var status: Label = Label.new()
+		if level <= 0:
+			status.text = "Цех не построен"
+		elif ProcessingManager.can_process_batch(facility_id):
+			status.text = "✅ Сырья достаточно"
+		else:
+			status.text = "⏸ Недостаточно сырья"
+		actions.add_child(status)
+
+		processing_container.add_child(panel)
+
+	var product_panel: PanelContainer = PanelContainer.new()
+	var product_box: VBoxContainer = VBoxContainer.new()
+	product_box.add_theme_constant_override("separation", 6)
+	product_panel.add_child(product_box)
+
+	var product_title: Label = Label.new()
+	product_title.add_theme_font_size_override("font_size", 15)
+	product_title.text = "📦 Склад готовой продукции"
+	product_box.add_child(product_title)
+
+	for product_id in ProcessingManager.PRODUCT_ORDER:
+		var product_info: Dictionary = ProcessingManager.PRODUCTS[product_id]
+		var line: Label = Label.new()
+		line.text = "%s %s: %.1f %s | цена %d 🪙/%s | произведено всего %.1f" % [
+			str(product_info.get("icon", "📦")),
+			str(product_info.get("name", product_id)),
+			ProcessingManager.get_product_amount(product_id),
+			str(product_info.get("unit", "")),
+			int(product_info.get("price", 0)),
+			str(product_info.get("unit", "")),
+			float(ProcessingManager.lifetime_output.get(product_id, 0.0))
+		]
+		product_box.add_child(line)
+
+	var sell_all: Button = Button.new()
+	sell_all.text = "Продать всю готовую продукцию"
+	var has_products: bool = false
+	for product_id in ProcessingManager.PRODUCT_ORDER:
+		if ProcessingManager.get_product_amount(product_id) > 0.0:
+			has_products = true
+			break
+	sell_all.disabled = not has_products
+	sell_all.pressed.connect(func():
+		if ProcessingManager.sell_all_products() > 0:
+			_update_ui()
+	)
+	product_box.add_child(sell_all)
+	processing_container.add_child(product_panel)
+
 func _setup_repair_buttons() -> void:
 	var do_repair = func():
 		repair_requested.emit()
@@ -1747,6 +1936,7 @@ func _update_ui() -> void:
 	_refresh_achievements_ui()
 	_refresh_offline_ui()
 	_refresh_livestock_ui()
+	_refresh_processing_ui()
 
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins
