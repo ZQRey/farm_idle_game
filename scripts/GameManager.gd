@@ -4,6 +4,7 @@ extends RefCounted
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
+const MarketManager = preload("res://scripts/MarketManager.gd")
 
 signal bankruptcy_declared
 signal season_changed(new_season: Season, season_name: String)
@@ -360,6 +361,7 @@ static func calculate_crop_sale_value(crop_id: String, amount_kg: float) -> int:
 	if has_windmill:
 		value *= 1.50
 	value *= get_season_price_multiplier()
+	value *= MarketManager.get_effective_multiplier(crop_id)
 	return max(0, int(round(value)))
 
 # ==============================================================================
