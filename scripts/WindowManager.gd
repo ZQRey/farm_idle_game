@@ -117,14 +117,36 @@ static func get_monitor_options() -> Array[Dictionary]:
 static func apply_desktop_styles() -> void:
 	if OS.get_name() != "Windows":
 		return
+
+	var source_path: String = "res://tools/window_helper.ps1"
+	if not FileAccess.file_exists(source_path):
+		push_warning("[WindowManager] window_helper.ps1 отсутствует в export.")
+		return
+
+	# В release res:// может находиться внутри embedded PCK, а PowerShell -File
+	# требует реальный файловый путь. Извлекаем helper в user://.
+	var source: FileAccess = FileAccess.open(source_path, FileAccess.READ)
+	if source == null:
+		push_warning("[WindowManager] Не удалось прочитать window_helper.ps1 из res://.")
+		return
+	var helper_text: String = source.get_as_text()
+	source.close()
+
+	var user_script_path: String = "user://window_helper_runtime.ps1"
+	var target: FileAccess = FileAccess.open(user_script_path, FileAccess.WRITE)
+	if target == null:
+		push_warning("[WindowManager] Не удалось создать runtime PowerShell helper.")
+		return
+	target.store_string(helper_text)
+	target.close()
+
 	var pid: int = OS.get_process_id()
-	var script_path: String = ProjectSettings.globalize_path("res://tools/window_helper.ps1")
-	if FileAccess.file_exists(script_path):
-		var args: PackedStringArray = [
-			"-NoProfile",
-			"-WindowStyle", "Hidden",
-			"-ExecutionPolicy", "Bypass",
-			"-File", script_path,
-			"-ProcessId", str(pid)
-		]
-		OS.create_process("powershell.exe", args)
+	var script_path: String = ProjectSettings.globalize_path(user_script_path)
+	var args: PackedStringArray = [
+		"-NoProfile",
+		"-WindowStyle", "Hidden",
+		"-ExecutionPolicy", "Bypass",
+		"-File", script_path,
+		"-ProcessId", str(pid)
+	]
+	OS.create_process("powershell.exe", args)
