@@ -2,6 +2,7 @@ class_name EventManager
 extends Node
 
 const GameManager = preload("res://scripts/GameManager.gd")
+const VehicleManager = preload("res://scripts/VehicleManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const AssetGenerator = preload("res://tools/AssetGenerator.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
@@ -331,6 +332,31 @@ func can_breakdown_occur() -> bool:
 		_:
 			return false
 
+func _get_current_vehicle_role() -> String:
+	if field_fsm == null:
+		return ""
+	match field_fsm.current_state:
+		FieldFSM.State.PLOWING:
+			return VehicleManager.ROLE_TRACTOR
+		FieldFSM.State.SOWING:
+			return VehicleManager.ROLE_TRACTOR if GameManager.has_seeder_tractor else ""
+		FieldFSM.State.HARVESTING:
+			return VehicleManager.ROLE_HARVESTER
+		FieldFSM.State.HAULING:
+			return VehicleManager.ROLE_TRUCK
+		_:
+			return ""
+
+func _get_breakdown_probability() -> float:
+	var role: String = _get_current_vehicle_role()
+	if role == "":
+		return 0.0
+	var reliability: float = VehicleManager.get_active_reliability(role)
+	var condition: float = VehicleManager.get_active_condition(role)
+	var reliability_risk: float = (1.0 - reliability) * 0.20
+	var condition_risk: float = clampf((60.0 - condition) / 60.0, 0.0, 1.0) * 0.12
+	return clampf(0.04 + reliability_risk + condition_risk, 0.04, 0.22)
+
 func _try_trigger_random_event() -> void:
 	if field_fsm == null or current_weather == Weather.NIGHT:
 		return
@@ -343,7 +369,7 @@ func _try_trigger_random_event() -> void:
 		print("[EventManager] 🦅 Стая ворон прилетела на поле!")
 	elif roll < 0.35 and field_fsm.current_state == FieldFSM.State.SOWING and not GameManager.has_seeder_tractor:
 		trigger_strike()
-	elif roll < 0.50 and can_breakdown_occur():
+	elif roll < 0.35 + _get_breakdown_probability() and can_breakdown_occur():
 		trigger_breakdown()
 	elif roll < 0.65 and can_breakdown_occur() and not is_police_active:
 		trigger_police()
