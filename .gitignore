@@ -4,3 +4,11 @@
 *.tmp
 user/
 *.log
+
+# Build artifacts
+build/
+dist/
+
+# Local Godot export credentials / signing data
+.godot/export_credentials.cfg
+export_credentials.cfg
