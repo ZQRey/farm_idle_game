@@ -16,6 +16,7 @@ const OfflineProgressManager = preload("res://scripts/OfflineProgressManager.gd"
 const LivestockManager = preload("res://scripts/LivestockManager.gd")
 const ProcessingManager = preload("res://scripts/ProcessingManager.gd")
 const MultiFieldManager = preload("res://scripts/MultiFieldManager.gd")
+const SpecializationManager = preload("res://scripts/SpecializationManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 
@@ -80,6 +81,9 @@ var processing_container: VBoxContainer
 
 # Несколько участков (динамическая вкладка)
 var fields_container: VBoxContainer
+
+# Специализации фермы (динамическая вкладка)
+var specialization_container: VBoxContainer
 
 # Магазин семян
 @onready var seed_container: VBoxContainer = $VBox/TabContainer/Магазин/ScrollSeeds/VBoxSeeds
@@ -182,6 +186,7 @@ func _ready() -> void:
 	_setup_livestock_tab()
 	_setup_processing_tab()
 	_setup_fields_tab()
+	_setup_specialization_tab()
 	_setup_monitors_list()
 	_setup_graphics_and_fps()
 	_setup_garage_and_decor()
@@ -2126,6 +2131,140 @@ func _refresh_fields_ui() -> void:
 	]
 	fields_container.add_child(totals)
 
+func _setup_specialization_tab() -> void:
+	if specialization_container != null:
+		return
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.name = "Специализация"
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	tab_container.add_child(margin)
+
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
+
+	specialization_container = VBoxContainer.new()
+	specialization_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	specialization_container.add_theme_constant_override("separation", 10)
+	scroll.add_child(specialization_container)
+
+func _refresh_specialization_ui() -> void:
+	if specialization_container == null:
+		return
+
+	for child in specialization_container.get_children():
+		child.queue_free()
+
+	if not SpecializationManager.initialized:
+		var loading: Label = Label.new()
+		loading.text = "🌿 Специализации загружаются..."
+		specialization_container.add_child(loading)
+		return
+
+	var title: Label = Label.new()
+	title.add_theme_font_size_override("font_size", 16)
+	title.text = "🌿 Специализация фермы"
+	specialization_container.add_child(title)
+
+	var points: Label = Label.new()
+	points.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	points.text = "Очки открываются на уровнях 20 / 25 / 30. Доступно: %d | потрачено: %d / %d." % [
+		SpecializationManager.get_available_points(),
+		SpecializationManager.get_spent_points(),
+		SpecializationManager.MAX_TIER
+	]
+	specialization_container.add_child(points)
+
+	if ProgressionManager.farm_level < 20:
+		var locked: Label = Label.new()
+		locked.text = "🔒 Первая специализация откроется на 20 уровне фермы."
+		specialization_container.add_child(locked)
+
+	var warning: Label = Label.new()
+	warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	warning.text = "Первый выбор фиксирует направление фермы. Другие ветки после выбора становятся недоступны; следующие очки усиливают выбранную специализацию."
+	specialization_container.add_child(warning)
+
+	for path_id in SpecializationManager.PATH_ORDER:
+		var path_info: Dictionary = SpecializationManager.PATHS[path_id]
+		var selected: bool = SpecializationManager.selected_path == path_id
+		var locked_by_other: bool = SpecializationManager.selected_path != SpecializationManager.PATH_NONE and not selected
+
+		var panel: PanelContainer = PanelContainer.new()
+		var box: VBoxContainer = VBoxContainer.new()
+		box.add_theme_constant_override("separation", 6)
+		panel.add_child(box)
+
+		var path_title: Label = Label.new()
+		path_title.add_theme_font_size_override("font_size", 15)
+		path_title.text = "%s %s%s" % [
+			str(path_info.get("icon", "🌿")),
+			str(path_info.get("name", path_id)),
+			" — ВЫБРАНО" if selected else ""
+		]
+		box.add_child(path_title)
+
+		var path_desc: Label = Label.new()
+		path_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		path_desc.text = str(path_info.get("description", ""))
+		box.add_child(path_desc)
+
+		for tier in range(1, SpecializationManager.MAX_TIER + 1):
+			var tier_info: Dictionary = SpecializationManager.get_tier_info(path_id, tier)
+			var tier_unlocked: bool = selected and SpecializationManager.unlocked_tier >= tier
+			var tier_line: Label = Label.new()
+			tier_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			tier_line.text = "%s Ступень %d — %s: %s" % [
+				"✔" if tier_unlocked else "○",
+				tier,
+				str(tier_info.get("name", "")),
+				str(tier_info.get("description", ""))
+			]
+			box.add_child(tier_line)
+
+		var action: Button = Button.new()
+		if selected:
+			if SpecializationManager.unlocked_tier >= SpecializationManager.MAX_TIER:
+				action.text = "Специализация MAX ✔"
+				action.disabled = true
+			elif SpecializationManager.can_unlock_next_tier():
+				action.text = "Открыть ступень %d (1 очко)" % (SpecializationManager.unlocked_tier + 1)
+				action.pressed.connect(func():
+					if SpecializationManager.unlock_next_tier():
+						_update_ui()
+				)
+			else:
+				var next_level: int = SpecializationManager.POINT_LEVELS[SpecializationManager.unlocked_tier]
+				action.text = "Следующее очко на ур. %d" % next_level
+				action.disabled = true
+		elif locked_by_other:
+			action.text = "Закрыто выбранной специализацией"
+			action.disabled = true
+		else:
+			action.text = "Выбрать направление (1 очко)"
+			action.disabled = not SpecializationManager.can_choose_path(path_id)
+			var choose_id: String = path_id
+			action.pressed.connect(func(target_id: String = choose_id):
+				if SpecializationManager.choose_path(target_id):
+					_update_ui()
+			)
+		box.add_child(action)
+		specialization_container.add_child(panel)
+
+	var current: Label = Label.new()
+	current.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	current.text = "Текущая специализация: %s | ступень %d/%d" % [
+		SpecializationManager.get_path_name(),
+		SpecializationManager.unlocked_tier,
+		SpecializationManager.MAX_TIER
+	]
+	specialization_container.add_child(current)
+
 func _setup_repair_buttons() -> void:
 	var do_repair = func():
 		repair_requested.emit()
@@ -2153,6 +2292,7 @@ func _update_ui() -> void:
 	_refresh_livestock_ui()
 	_refresh_processing_ui()
 	_refresh_fields_ui()
+	_refresh_specialization_ui()
 
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins
