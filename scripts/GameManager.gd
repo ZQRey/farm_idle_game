@@ -5,6 +5,7 @@ const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const MarketManager = preload("res://scripts/MarketManager.gd")
+const VehicleManager = preload("res://scripts/VehicleManager.gd")
 
 signal bankruptcy_declared
 signal season_changed(new_season: Season, season_name: String)
@@ -235,6 +236,21 @@ static func init_from_settings() -> void:
 	harvester_condition = float(SettingsManager.config.get_value("durability", "harvester_condition", 100.0))
 	truck_condition = float(SettingsManager.config.get_value("durability", "truck_condition", 100.0))
 
+	VehicleManager.init_from_settings(
+		{
+			"heavy_tractor": has_heavy_tractor,
+			"super_harvester": has_super_harvester,
+			"road_train": has_road_train
+		},
+		{
+			"tractor": tractor_condition,
+			"tanker": tanker_condition,
+			"harvester": harvester_condition,
+			"truck": truck_condition
+		}
+	)
+	_sync_legacy_vehicle_state()
+
 	windmill_condition = float(SettingsManager.config.get_value("durability", "windmill_condition", 100.0))
 	barn_condition = float(SettingsManager.config.get_value("durability", "barn_condition", 100.0))
 	canopy_condition = float(SettingsManager.config.get_value("durability", "canopy_condition", 100.0))
@@ -298,9 +314,11 @@ static func save_to_settings() -> void:
 	SettingsManager.config.set_value("game", "active_decoration", active_decoration)
 	SettingsManager.config.set_value("game", "unlocked_decorations", unlocked_decorations)
 
+	_sync_legacy_vehicle_state()
 	SettingsManager.config.set_value("game", "has_heavy_tractor", has_heavy_tractor)
 	SettingsManager.config.set_value("game", "has_super_harvester", has_super_harvester)
 	SettingsManager.config.set_value("game", "has_road_train", has_road_train)
+	VehicleManager.write_to_config()
 
 	SettingsManager.config.set_value("mechanics", "fuel_level", fuel_level)
 	SettingsManager.config.set_value("mechanics", "auto_refuel", auto_refuel)
@@ -386,12 +404,24 @@ static func refuel(amount: float, cost: int) -> bool:
 # ==============================================================================
 # ИЗНОС И ТЕХОБСЛУЖИВАНИЕ (СТАРЕНИЕ)
 # ==============================================================================
+static func _sync_legacy_vehicle_state() -> void:
+	if not VehicleManager.initialized:
+		return
+	has_heavy_tractor = VehicleManager.owns_model("tractor_heavy")
+	has_super_harvester = VehicleManager.owns_model("harvester_super")
+	has_road_train = VehicleManager.owns_model("truck_road_train")
+	tractor_condition = VehicleManager.get_active_condition(VehicleManager.ROLE_TRACTOR)
+	tanker_condition = VehicleManager.get_active_condition(VehicleManager.ROLE_TANKER)
+	harvester_condition = VehicleManager.get_active_condition(VehicleManager.ROLE_HARVESTER)
+	truck_condition = VehicleManager.get_active_condition(VehicleManager.ROLE_TRUCK)
+
 static func degrade_durability() -> void:
-	# Снижение состояния техники за каждый завершенный цикл
-	tractor_condition = max(5.0, tractor_condition - 2.5)
-	tanker_condition = max(5.0, tanker_condition - 2.0)
-	harvester_condition = max(5.0, harvester_condition - 2.5)
-	truck_condition = max(5.0, truck_condition - 2.0)
+	# Износ теперь применяется к реально активным экземплярам техники.
+	VehicleManager.add_cycle_usage(VehicleManager.ROLE_TRACTOR, 4.0, 2.5)
+	VehicleManager.add_cycle_usage(VehicleManager.ROLE_TANKER, 2.0, 2.0)
+	VehicleManager.add_cycle_usage(VehicleManager.ROLE_HARVESTER, 5.0, 2.5)
+	VehicleManager.add_cycle_usage(VehicleManager.ROLE_TRUCK, 6.0, 2.0)
+	_sync_legacy_vehicle_state()
 
 	if has_windmill:
 		windmill_condition = max(10.0, windmill_condition - 1.2)
@@ -402,18 +432,25 @@ static func degrade_durability() -> void:
 	if greenhouse_count > 0:
 		greenhouse_condition = max(10.0, greenhouse_condition - 1.2)
 
+	VehicleManager.save_to_settings()
 	save_to_settings()
 
 static func get_machinery_average_condition() -> float:
+	if VehicleManager.initialized:
+		return VehicleManager.get_average_active_condition()
 	return (tractor_condition + tanker_condition + harvester_condition + truck_condition) / 4.0
 
 static func repair_all_machinery() -> bool:
 	var cost: int = 40
 	if spend_coins(cost):
-		tractor_condition = 100.0
-		tanker_condition = 100.0
-		harvester_condition = 100.0
-		truck_condition = 100.0
+		if VehicleManager.initialized:
+			VehicleManager.repair_all_owned()
+			_sync_legacy_vehicle_state()
+		else:
+			tractor_condition = 100.0
+			tanker_condition = 100.0
+			harvester_condition = 100.0
+			truck_condition = 100.0
 		save_to_settings()
 		return true
 	return false
@@ -627,6 +664,9 @@ static func declare_bankruptcy() -> void:
 	has_heavy_tractor = false
 	has_super_harvester = false
 	has_road_train = false
+	if VehicleManager.initialized:
+		VehicleManager.reset_to_defaults()
+		_sync_legacy_vehicle_state()
 	active_decoration = "none"
 	unlocked_decorations = ["none"]
 
