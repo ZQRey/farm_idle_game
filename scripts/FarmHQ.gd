@@ -9,6 +9,7 @@ const MarketManager = preload("res://scripts/MarketManager.gd")
 const VehicleManager = preload("res://scripts/VehicleManager.gd")
 const WorkerManager = preload("res://scripts/WorkerManager.gd")
 const BuildingManager = preload("res://scripts/BuildingManager.gd")
+const QualityManager = preload("res://scripts/QualityManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 
@@ -292,8 +293,9 @@ func _make_contract_panel(contract: Dictionary, is_active: bool) -> PanelContain
 	var progress: int = int(contract.get("progress", 0)) if is_active else 0
 
 	var description: Label = Label.new()
-	description.text = "Поставить урожай: %d цикл(а/ов) | Награда: %d 🪙 + %d XP + %d реп." % [
+	description.text = "Поставить урожай: %d цикл(а/ов) | качество ≥ %s | Награда: %d 🪙 + %d XP + %d реп." % [
 		target,
+		str(contract.get("min_quality", "C")),
 		int(contract.get("reward_coins", 0)),
 		int(contract.get("reward_xp", 0)),
 		int(contract.get("reward_rep", 0))
@@ -429,11 +431,12 @@ func _setup_storage_tab() -> void:
 	scroll.add_child(storage_container)
 
 func _sell_from_storage(crop_id: String, requested_kg: float) -> void:
-	var removed_kg: float = InventoryManager.remove_crop(crop_id, requested_kg)
+	var removed: Dictionary = InventoryManager.remove_crop_with_quality(crop_id, requested_kg)
+	var removed_kg: float = float(removed.get("total_kg", 0.0))
 	if removed_kg <= 0.0:
 		return
 
-	var gross: int = GameManager.calculate_crop_sale_value(crop_id, removed_kg)
+	var gross: int = GameManager.calculate_quality_breakdown_sale_value(crop_id, removed)
 	var sale: Dictionary = GameManager.process_sale_finances(gross)
 	var debt_paid: int = int(sale.get("subsidy_paid", 0)) + int(sale.get("loan_paid", 0))
 	print("[FarmHQ] Продано %.0f кг %s: валовая выручка %d, долг -%d, в казну +%d" % [
@@ -534,7 +537,14 @@ func _refresh_storage_ui() -> void:
 		var crop_data: Dictionary = GameManager.CROPS.get(crop_id, {})
 		var crop_name: String = str(crop_data.get("name", crop_id))
 		var amount: float = InventoryManager.get_stock(crop_id)
-		var price_100: int = GameManager.calculate_crop_sale_value(crop_id, 100.0)
+		var price_100: int = GameManager.calculate_crop_sale_value(crop_id, 100.0, "B")
+		var quality_breakdown: Dictionary = InventoryManager.get_quality_breakdown(crop_id)
+		var quality_text: String = "C %.0f | B %.0f | A %.0f | S %.0f кг" % [
+			float(quality_breakdown.get("C", 0.0)),
+			float(quality_breakdown.get("B", 0.0)),
+			float(quality_breakdown.get("A", 0.0)),
+			float(quality_breakdown.get("S", 0.0))
+		]
 
 		var panel: PanelContainer = PanelContainer.new()
 		var row: HBoxContainer = HBoxContainer.new()
@@ -543,7 +553,14 @@ func _refresh_storage_ui() -> void:
 
 		var info: Label = Label.new()
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		info.text = "%s: %.0f кг | текущая рыночная цена: %d 🪙 / 100 кг" % [crop_name, amount, price_100]
+		info.text = "%s: %.0f кг | %s | цена B: %d 🪙 / 100 кг | последний: %s | лучший: %s" % [
+			crop_name,
+			amount,
+			quality_text,
+			price_100,
+			QualityManager.get_last_grade(crop_id),
+			QualityManager.get_best_grade(crop_id)
+		]
 		row.add_child(info)
 
 		var sell_100: Button = Button.new()
@@ -567,9 +584,13 @@ func _refresh_storage_ui() -> void:
 		storage_container.add_child(panel)
 
 	var overflow_note: Label = Label.new()
-	overflow_note.text = "Всего принято на склад: %.0f кг | Через переполнение прошло: %.0f кг" % [
+	overflow_note.text = "Всего принято на склад: %.0f кг | Через переполнение прошло: %.0f кг | Классы: C %.0f / B %.0f / A %.0f / S %.0f кг" % [
 		InventoryManager.total_harvest_stored_kg,
-		InventoryManager.total_overflow_kg
+		InventoryManager.total_overflow_kg,
+		QualityManager.get_total_kg_for_grade("C"),
+		QualityManager.get_total_kg_for_grade("B"),
+		QualityManager.get_total_kg_for_grade("A"),
+		QualityManager.get_total_kg_for_grade("S")
 	]
 	storage_container.add_child(overflow_note)
 

@@ -8,6 +8,7 @@ const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const VehicleManager = preload("res://scripts/VehicleManager.gd")
 const WorkerManager = preload("res://scripts/WorkerManager.gd")
 const BuildingManager = preload("res://scripts/BuildingManager.gd")
+const QualityManager = preload("res://scripts/QualityManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const AssetGenerator = preload("res://tools/AssetGenerator.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
@@ -976,7 +977,12 @@ func _finish_hauling_cycle() -> void:
 	harvest_kg *= VehicleManager.get_capacity_multiplier(VehicleManager.ROLE_HARVESTER)
 	harvest_kg *= WorkerManager.get_yield_multiplier()
 	harvest_kg *= BuildingManager.get_yield_multiplier()
-	var deposit: Dictionary = InventoryManager.deposit_crop(crop_id, harvest_kg)
+
+	var quality: Dictionary = QualityManager.calculate_quality(crop_id, current_weather_id)
+	var quality_grade: String = str(quality.get("grade", "B"))
+	var quality_score: float = float(quality.get("score", 0.0))
+	QualityManager.register_harvest(crop_id, quality_grade, harvest_kg)
+	var deposit: Dictionary = InventoryManager.deposit_crop(crop_id, harvest_kg, quality_grade)
 	var stored_kg: float = float(deposit.get("stored_kg", 0.0))
 	var overflow_kg: float = float(deposit.get("overflow_kg", 0.0))
 
@@ -987,8 +993,9 @@ func _finish_hauling_cycle() -> void:
 
 	if stored_kg > 0.0:
 		if InventoryManager.auto_sell_on_harvest:
-			var sold_kg: float = InventoryManager.remove_crop(crop_id, stored_kg)
-			var gross_sale: int = GameManager.calculate_crop_sale_value(crop_id, sold_kg)
+			var sold_breakdown: Dictionary = InventoryManager.remove_crop_with_quality(crop_id, stored_kg)
+			var sold_kg: float = float(sold_breakdown.get("total_kg", 0.0))
+			var gross_sale: int = GameManager.calculate_quality_breakdown_sale_value(crop_id, sold_breakdown)
 			var sale_result: Dictionary = GameManager.process_sale_finances(gross_sale)
 			transaction_net += int(sale_result.get("net_coins", 0))
 			total_debt_paid += int(sale_result.get("subsidy_paid", 0)) + int(sale_result.get("loan_paid", 0))
@@ -1000,7 +1007,7 @@ func _finish_hauling_cycle() -> void:
 	# В режиме автопродажи новый урожай продаётся по полной цене даже если старые запасы уже заняли склад.
 	if overflow_kg > 0.0:
 		var overflow_factor: float = 1.0 if InventoryManager.auto_sell_on_harvest else 0.70
-		var overflow_gross: int = int(round(float(GameManager.calculate_crop_sale_value(crop_id, overflow_kg)) * overflow_factor))
+		var overflow_gross: int = int(round(float(GameManager.calculate_crop_sale_value(crop_id, overflow_kg, quality_grade)) * overflow_factor))
 		var overflow_sale: Dictionary = GameManager.process_sale_finances(overflow_gross)
 		transaction_net += int(overflow_sale.get("net_coins", 0))
 		total_debt_paid += int(overflow_sale.get("subsidy_paid", 0)) + int(overflow_sale.get("loan_paid", 0))
@@ -1010,6 +1017,7 @@ func _finish_hauling_cycle() -> void:
 			bonus_text += " [Переполнение %.0f кг → 70%%]" % overflow_kg
 
 	GameManager.total_harvested += 1
+	bonus_text += " [Качество %s %.0f]" % [quality_grade, quality_score]
 
 	var worker_progress: Dictionary = WorkerManager.record_cycle_completion()
 	var worker_level_ups: Array = worker_progress.get("level_ups", [])
@@ -1025,7 +1033,7 @@ func _finish_hauling_cycle() -> void:
 		bonus_text += " [Ур. %d!]" % ProgressionManager.farm_level
 
 	# Контракты считаются по факту произведённого урожая, независимо от решения продать или хранить.
-	var contract_rewards: Array = ContractManager.record_harvest(crop_id)
+	var contract_rewards: Array = ContractManager.record_harvest(crop_id, quality_grade)
 	if not contract_rewards.is_empty():
 		var contract_coins: int = 0
 		var contract_xp: int = 0
