@@ -6,6 +6,7 @@ const WorkerManager = preload("res://scripts/WorkerManager.gd")
 const BuildingManager = preload("res://scripts/BuildingManager.gd")
 const VehicleManager = preload("res://scripts/VehicleManager.gd")
 const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
+const SpecializationManager = preload("res://scripts/SpecializationManager.gd")
 
 const GRADES: Array[String] = ["C", "B", "A", "S"]
 const GRADE_ORDER: Dictionary = {"C": 0, "B": 1, "A": 2, "S": 3}
@@ -71,6 +72,7 @@ static func calculate_quality(crop_id: String, weather_id: int) -> Dictionary:
 	score += min(12.0, float(agronomist_level) * 1.25)
 	score += float(BuildingManager.get_level("agronomy_lab")) * 4.0
 	score += PositiveEventManager.get_quality_bonus()
+	score += SpecializationManager.get_crop_quality_bonus()
 
 	score = clampf(score, 0.0, 100.0)
 	var grade: String = grade_from_score(score)

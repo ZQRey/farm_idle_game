@@ -8,6 +8,7 @@ const BuildingManager = preload("res://scripts/BuildingManager.gd")
 const QualityManager = preload("res://scripts/QualityManager.gd")
 const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const ContractManager = preload("res://scripts/ContractManager.gd")
+const SpecializationManager = preload("res://scripts/SpecializationManager.gd")
 
 const AUX_FIELD_IDS: Array[String] = ["field_2", "field_3"]
 const MAX_LEVEL: int = 3
@@ -123,12 +124,13 @@ static func set_monitor(field_id: String, monitor_index: int) -> bool:
 
 static func get_cycle_seconds(field_id: String) -> float:
 	var level: int = clampi(int(fields.get(field_id, {}).get("level", 1)), 1, MAX_LEVEL)
+	var base_seconds: float = BASE_CYCLE_SECONDS
 	match level:
 		2:
-			return 15.0 * 60.0
+			base_seconds = 15.0 * 60.0
 		3:
-			return 12.0 * 60.0
-	return BASE_CYCLE_SECONDS
+			base_seconds = 12.0 * 60.0
+	return base_seconds * SpecializationManager.get_aux_field_cycle_multiplier()
 
 static func get_yield_multiplier(field_id: String) -> float:
 	var level: int = clampi(int(fields.get(field_id, {}).get("level", 1)), 1, MAX_LEVEL)
@@ -213,6 +215,7 @@ static func _complete_cycle(field_id: String, field: Dictionary) -> Dictionary:
 	var harvest_kg: float = InventoryManager.calculate_harvest_kg(1.0, false)
 	harvest_kg *= get_yield_multiplier(field_id)
 	harvest_kg *= BuildingManager.get_yield_multiplier()
+	harvest_kg *= SpecializationManager.get_crop_yield_multiplier()
 	QualityManager.register_harvest(crop_id, FIELD_QUALITY_GRADE, harvest_kg)
 
 	var deposit: Dictionary = InventoryManager.deposit_crop(crop_id, harvest_kg, FIELD_QUALITY_GRADE)

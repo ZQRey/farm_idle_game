@@ -5,6 +5,7 @@ const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const LivestockManager = preload("res://scripts/LivestockManager.gd")
 const GameManager = preload("res://scripts/GameManager.gd")
+const SpecializationManager = preload("res://scripts/SpecializationManager.gd")
 
 const TICK_SECONDS: int = 300
 const MAX_LEVEL: int = 3
@@ -191,7 +192,7 @@ static func sell_all_products() -> int:
 		if amount <= 0.0:
 			continue
 		var info: Dictionary = PRODUCTS[product_id]
-		gross += int(round(amount * float(info.get("price", 0))))
+		gross += int(round(amount * float(info.get("price", 0)) * SpecializationManager.get_processing_sale_multiplier()))
 	if gross <= 0:
 		return 0
 
@@ -227,7 +228,7 @@ static func _process_batch(facility_id: String) -> Dictionary:
 	var input_id: String = str(info.get("input_id", ""))
 	var input_amount: float = float(info.get("input_amount", 0.0))
 	var output_id: String = str(info.get("output_id", ""))
-	var output_amount: float = float(info.get("output_amount", 0.0))
+	var output_amount: float = float(info.get("output_amount", 0.0)) * SpecializationManager.get_processing_output_multiplier()
 
 	if input_kind == "crop":
 		var removed: float = InventoryManager.remove_crop(input_id, input_amount)

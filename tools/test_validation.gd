@@ -18,6 +18,7 @@ const OfflineProgressManager = preload("res://scripts/OfflineProgressManager.gd"
 const LivestockManager = preload("res://scripts/LivestockManager.gd")
 const ProcessingManager = preload("res://scripts/ProcessingManager.gd")
 const MultiFieldManager = preload("res://scripts/MultiFieldManager.gd")
+const SpecializationManager = preload("res://scripts/SpecializationManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 
@@ -1054,6 +1055,66 @@ func _init() -> void:
 	ProgressionManager.save_to_settings()
 	ContractManager.save_to_settings()
 	GameManager.save_to_settings()
+
+	# 21. Тест: специализации, взаимоисключение веток и persistence
+	print("\n[ТЕСТ 21] Проверка специализаций:")
+	var old_spec_path: String = SpecializationManager.selected_path
+	var old_spec_tier: int = SpecializationManager.unlocked_tier
+	var old_spec_level: int = ProgressionManager.farm_level
+	var old_spec_xp: int = ProgressionManager.xp
+
+	ProgressionManager.farm_level = 30
+	ProgressionManager.xp = 0
+	SpecializationManager.initialized = true
+	SpecializationManager.selected_path = SpecializationManager.PATH_NONE
+	SpecializationManager.unlocked_tier = 0
+
+	assert(SpecializationManager.get_total_points() == 3, "На 30 уровне должно быть 3 очка специализации")
+	assert(SpecializationManager.get_available_points() == 3, "До выбора все 3 очка должны быть свободны")
+	assert(SpecializationManager.choose_path(SpecializationManager.PATH_CROPS), "Должна выбираться ветка растениеводства")
+	assert(SpecializationManager.selected_path == SpecializationManager.PATH_CROPS, "Выбранная ветка должна сохраниться в состоянии")
+	assert(SpecializationManager.unlocked_tier == 1, "Выбор ветки должен открыть первую ступень")
+	assert(not SpecializationManager.can_choose_path(SpecializationManager.PATH_LIVESTOCK), "После выбора другие ветки должны блокироваться")
+	assert(SpecializationManager.get_crop_yield_multiplier() > 1.0, "Первая ступень растениеводства должна повышать урожайность")
+
+	assert(SpecializationManager.unlock_next_tier(), "Должна открыться вторая ступень")
+	assert(SpecializationManager.unlocked_tier == 2, "Вторая ступень должна быть активна")
+	assert(SpecializationManager.get_crop_quality_bonus() > 0.0, "Вторая ступень должна повышать качество")
+	assert(SpecializationManager.unlock_next_tier(), "Должна открыться третья ступень")
+	assert(SpecializationManager.unlocked_tier == 3, "Третья ступень должна быть активна")
+	assert(SpecializationManager.get_crop_yield_multiplier() >= 1.20, "Третья ступень должна дать суммарный бонус урожайности")
+	assert(SpecializationManager.get_aux_field_cycle_multiplier() < 1.0, "Третья ступень должна ускорять автономные участки")
+	assert(SpecializationManager.get_available_points() == 0, "После трёх ступеней свободных очков не должно остаться")
+
+	# Прямо проверяем эффекты двух остальных взаимоисключающих веток.
+	SpecializationManager.selected_path = SpecializationManager.PATH_LIVESTOCK
+	SpecializationManager.unlocked_tier = 3
+	assert(SpecializationManager.get_livestock_feed_multiplier() < 0.90, "Животновод 3 ступени должен заметно снижать расход корма")
+	assert(SpecializationManager.get_livestock_output_multiplier() >= 1.35, "Животновод 3 ступени должен повышать продукцию на 35%")
+
+	SpecializationManager.selected_path = SpecializationManager.PATH_PROCESSING
+	SpecializationManager.unlocked_tier = 3
+	assert(SpecializationManager.get_processing_output_multiplier() >= 1.35, "Переработчик 3 ступени должен повышать выход на 35%")
+	assert(SpecializationManager.get_processing_sale_multiplier() >= 1.12, "Переработчик 3 ступени должен повышать цену готовой продукции")
+
+	# Persistence проверяем на исходно выбранной ветке растениеводства.
+	SpecializationManager.selected_path = SpecializationManager.PATH_CROPS
+	SpecializationManager.unlocked_tier = 3
+	SpecializationManager.save_to_settings()
+	SpecializationManager.selected_path = SpecializationManager.PATH_NONE
+	SpecializationManager.unlocked_tier = 0
+	SpecializationManager.init_from_settings()
+	assert(SpecializationManager.selected_path == SpecializationManager.PATH_CROPS, "Выбранная специализация должна восстановиться")
+	assert(SpecializationManager.unlocked_tier == 3, "Ступень специализации должна восстановиться")
+	print("  ✔ ТЕСТ 21 УСПЕШНО ПРОЙДЕН!")
+
+	SpecializationManager.selected_path = old_spec_path
+	SpecializationManager.unlocked_tier = old_spec_tier
+	SpecializationManager.initialized = true
+	SpecializationManager.save_to_settings()
+	ProgressionManager.farm_level = old_spec_level
+	ProgressionManager.xp = old_spec_xp
+	ProgressionManager.save_to_settings()
 
 	print("\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ! СИСТЕМА ПОЛНОСТЬЮ ИСПРАВНА!")
 	quit(0)

@@ -10,6 +10,7 @@ const BuildingManager = preload("res://scripts/BuildingManager.gd")
 const QualityManager = preload("res://scripts/QualityManager.gd")
 const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const ContractManager = preload("res://scripts/ContractManager.gd")
+const SpecializationManager = preload("res://scripts/SpecializationManager.gd")
 
 const MAX_OFFLINE_SECONDS: int = 8 * 60 * 60
 const OFFLINE_EFFICIENCY: float = 0.65
@@ -138,6 +139,7 @@ static func _simulate_offline_window(window: Dictionary) -> Dictionary:
 		harvest_kg *= VehicleManager.get_capacity_multiplier(VehicleManager.ROLE_HARVESTER)
 		harvest_kg *= WorkerManager.get_yield_multiplier()
 		harvest_kg *= BuildingManager.get_yield_multiplier()
+		harvest_kg *= SpecializationManager.get_crop_yield_multiplier()
 
 		QualityManager.register_harvest(crop_id, OFFLINE_QUALITY_GRADE, harvest_kg)
 		var deposit: Dictionary = InventoryManager.deposit_crop(crop_id, harvest_kg, OFFLINE_QUALITY_GRADE)
