@@ -19,7 +19,7 @@ const UPGRADE_CATALOG: Dictionary = {
 		"description": "+4% скорость и +2% производительность за уровень"
 	},
 	"fuel_system": {
-		"name": "Топливная система",
+		"name": "Топливная система и бак",
 		"icon": "⛽",
 		"base_cost": 90,
 		"description": "-4% расход топлива за уровень"
@@ -332,7 +332,7 @@ static func add_cycle_usage(role: String, mileage_km: float, condition_loss: flo
 		return
 	var v: Dictionary = vehicles[vehicle_id]
 	v["mileage_km"] = max(0.0, float(v.get("mileage_km", 0.0)) + max(0.0, mileage_km))
-	var reliability: float = clampf(float(v.get("reliability", 0.85)), 0.05, 1.0)
+	var reliability: float = get_active_reliability(role)
 	var adjusted_loss: float = max(0.0, condition_loss) * (1.15 - reliability * 0.30)
 	v["condition"] = max(5.0, float(v.get("condition", 100.0)) - adjusted_loss)
 	vehicles[vehicle_id] = v
