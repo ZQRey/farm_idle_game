@@ -10,6 +10,7 @@ const WorkerManager = preload("res://scripts/WorkerManager.gd")
 const BuildingManager = preload("res://scripts/BuildingManager.gd")
 const QualityManager = preload("res://scripts/QualityManager.gd")
 const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
+const PrestigeManager = preload("res://scripts/PrestigeManager.gd")
 
 signal bankruptcy_declared
 signal season_changed(new_season: Season, season_name: String)
@@ -415,6 +416,7 @@ static func calculate_crop_sale_value(crop_id: String, amount_kg: float, quality
 	value *= get_season_price_multiplier()
 	value *= MarketManager.get_effective_multiplier(crop_id)
 	value *= QualityManager.get_price_multiplier(quality_grade)
+	value *= PrestigeManager.get_sale_multiplier()
 	if include_temporary_bonus:
 		value *= PositiveEventManager.get_sale_multiplier()
 	return max(0, int(round(value)))
@@ -711,10 +713,11 @@ static func process_harvest_finances(gross_reward: int) -> Dictionary:
 	}
 
 ## Процедура банкротства (Сброс игры с начала и списание долгов)
-static func declare_bankruptcy() -> void:
+static func declare_bankruptcy(count_as_bankruptcy: bool = true) -> void:
 	print("[GameManager] 🚨 ОБЪЯВЛЕНО БАНКРОТСТВО! Сброс фермы до стартовых параметров...")
 	
-	total_bankruptcies += 1
+	if count_as_bankruptcy:
+		total_bankruptcies += 1
 	coins = 100
 	subsidy_debt = 0
 	loan_debt = 0
