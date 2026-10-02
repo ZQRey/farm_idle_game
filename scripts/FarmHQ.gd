@@ -2329,7 +2329,7 @@ func _refresh_prestige_ui() -> void:
 
 	var permanent: Label = Label.new()
 	permanent.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	permanent.text = "Каждый Prestige навсегда даёт: +3% урожайности, +2% к цене продажи, +1 п.п. offline efficiency и +50 стартовых монет. Максимум — %d рангов." % PrestigeManager.MAX_PRESTIGE_RANK
+	permanent.text = "Каждый Prestige навсегда даёт: +3%% урожайности, +2%% к цене продажи, +1 п.п. offline efficiency и +50 стартовых монет. Максимум — %d рангов." % PrestigeManager.MAX_PRESTIGE_RANK
 	prestige_container.add_child(permanent)
 
 	var keep: Label = Label.new()
