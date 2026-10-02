@@ -98,8 +98,8 @@ func _rebuild_context_menu() -> void:
 	if is_police_active:
 		var fine_c: int = 40 if GameManager.has_guard_dog else 80
 		var bribe_c: int = max(10, int(GameManager.coins * 0.10))
-		context_menu.add_item("📋 Оплатить штраф полиции (%d 🪙)" % fine_c, 302)
-		context_menu.add_item("🤝 Дать взятку инспектору 10%% (%d 🪙)" % bribe_c, 303)
+		context_menu.add_item("📋 Оплатить штраф проверки (%d 🪙)" % fine_c, 302)
+		context_menu.add_item("🧾 Пройти экспресс-проверку (%d 🪙)" % bribe_c, 303)
 
 	context_menu.add_separator()
 	context_menu.add_item("🗓 Сезон: " + season_string, 111)
@@ -133,8 +133,11 @@ func _update_monitor_submenu() -> void:
 		var opt_id: int = opt.id
 		var menu_item_id: int = 500 if opt_id == WindowManager.SCREEN_ALL_MONITORS else (501 + opt_id)
 		monitor_submenu.add_radio_check_item(opt.title, menu_item_id)
-		var is_active: bool = (opt_id == current_screen)
-		monitor_submenu.set_item_checked(monitor_submenu.get_item_index(menu_item_id), is_active)
+		var item_index: int = monitor_submenu.get_item_index(menu_item_id)
+		var enabled: bool = bool(opt.get("enabled", true))
+		monitor_submenu.set_item_disabled(item_index, not enabled)
+		var is_active: bool = (opt_id == current_screen) and enabled
+		monitor_submenu.set_item_checked(item_index, is_active)
 
 func _update_graphics_submenu() -> void:
 	if graphics_submenu == null:
@@ -172,6 +175,8 @@ func _on_context_menu_item_pressed(id: int) -> void:
 
 func _on_monitor_selected(menu_item_id: int) -> void:
 	var screen_idx: int = WindowManager.SCREEN_ALL_MONITORS if menu_item_id == 500 else (menu_item_id - 501)
+	if screen_idx == WindowManager.SCREEN_ALL_MONITORS and not WindowManager.supports_single_window_all_monitors():
+		return
 	SettingsManager.set_screen_index(screen_idx)
 	_update_monitor_submenu()
 	monitor_changed.emit(screen_idx)
