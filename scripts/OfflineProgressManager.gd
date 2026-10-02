@@ -149,7 +149,7 @@ static func _simulate_offline_window(window: Dictionary) -> Dictionary:
 		if stored_kg > 0.0 and InventoryManager.auto_sell_on_harvest:
 			var sold_breakdown: Dictionary = InventoryManager.remove_crop_with_quality(crop_id, stored_kg)
 			var sold_kg: float = float(sold_breakdown.get("total_kg", 0.0))
-			var gross: int = GameManager.calculate_quality_breakdown_sale_value(crop_id, sold_breakdown)
+			var gross: int = GameManager.calculate_quality_breakdown_sale_value(crop_id, sold_breakdown, false)
 			var sale: Dictionary = GameManager.process_sale_finances(gross)
 			report["sold_kg"] = float(report["sold_kg"]) + sold_kg
 			report["gross_coins"] = int(report["gross_coins"]) + gross
@@ -159,7 +159,7 @@ static func _simulate_offline_window(window: Dictionary) -> Dictionary:
 
 		if overflow_kg > 0.0:
 			var overflow_factor: float = 1.0 if InventoryManager.auto_sell_on_harvest else 0.70
-			var overflow_gross: int = int(round(float(GameManager.calculate_crop_sale_value(crop_id, overflow_kg, OFFLINE_QUALITY_GRADE)) * overflow_factor))
+			var overflow_gross: int = int(round(float(GameManager.calculate_crop_sale_value(crop_id, overflow_kg, OFFLINE_QUALITY_GRADE, false)) * overflow_factor))
 			var overflow_sale: Dictionary = GameManager.process_sale_finances(overflow_gross)
 			report["sold_kg"] = float(report["sold_kg"]) + overflow_kg
 			report["gross_coins"] = int(report["gross_coins"]) + overflow_gross
@@ -167,7 +167,7 @@ static func _simulate_offline_window(window: Dictionary) -> Dictionary:
 
 		GameManager.total_harvested += 1
 		GameManager.degrade_durability()
-		WorkerManager.record_cycle_completion()
+		WorkerManager.record_cycle_completion(false)
 		ProgressionManager.add_harvest_progress(crop_id)
 
 		var contract_rewards: Array = ContractManager.record_harvest(crop_id, OFFLINE_QUALITY_GRADE)
