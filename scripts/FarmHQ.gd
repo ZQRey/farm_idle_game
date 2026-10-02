@@ -220,9 +220,9 @@ func _on_tab_changed(_idx: int) -> void:
 	_update_ui()
 
 func open_hq() -> void:
+	show()
 	_refresh_seeds_ui()
 	_update_ui()
-	show()
 	grab_focus()
 
 func _setup_progression_ui() -> void:
@@ -2387,21 +2387,46 @@ func _setup_repair_buttons() -> void:
 			_update_ui()
 		)
 
+func _refresh_visible_dynamic_tab() -> void:
+	if tab_container == null:
+		return
+	var current: Control = tab_container.get_current_tab_control()
+	if current == null:
+		return
+	match current.name:
+		"Контракты":
+			_refresh_contracts_ui()
+		"Склад":
+			_refresh_storage_ui()
+		"Рынок":
+			_refresh_market_ui()
+		"Автопарк":
+			_refresh_fleet_ui()
+		"Работники":
+			_refresh_workers_ui()
+		"Инфраструктура":
+			_refresh_buildings_ui()
+		"События":
+			_refresh_positive_events_ui()
+		"Достижения":
+			_refresh_achievements_ui()
+		"Офлайн":
+			_refresh_offline_ui()
+		"Животноводство":
+			_refresh_livestock_ui()
+		"Переработка":
+			_refresh_processing_ui()
+		"Участки":
+			_refresh_fields_ui()
+		"Специализация":
+			_refresh_specialization_ui()
+		"Prestige":
+			_refresh_prestige_ui()
+
 func _update_ui() -> void:
-	_refresh_contracts_ui()
-	_refresh_storage_ui()
-	_refresh_market_ui()
-	_refresh_fleet_ui()
-	_refresh_workers_ui()
-	_refresh_buildings_ui()
-	_refresh_positive_events_ui()
-	_refresh_achievements_ui()
-	_refresh_offline_ui()
-	_refresh_livestock_ui()
-	_refresh_processing_ui()
-	_refresh_fields_ui()
-	_refresh_specialization_ui()
-	_refresh_prestige_ui()
+	# Динамические вкладки создают много Control-узлов. Перестраиваем только
+	# активную вкладку вместо всех 14 секций при каждом игровом событии.
+	_refresh_visible_dynamic_tab()
 
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins
