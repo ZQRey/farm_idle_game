@@ -1184,5 +1184,37 @@ func _init() -> void:
 	SettingsManager.save_settings()
 	ProgressionManager.save_to_settings()
 
+	# 23. Тест: schema migration и санитарная проверка save
+	print("\n[ТЕСТ 23] Проверка миграций и валидации save:")
+	var real_config: ConfigFile = SettingsManager.config
+	var temp_config: ConfigFile = ConfigFile.new()
+	SettingsManager.config = temp_config
+	temp_config.set_value("finances", "total_bankruptcies", 7)
+	temp_config.set_value("display", "screen_index", -1)
+	temp_config.set_value("display", "graphics_mode", "broken-mode")
+	temp_config.set_value("display", "fps_limit", 999)
+	temp_config.set_value("game", "coins", -50)
+	temp_config.set_value("game", "current_crop", "invalid_crop")
+	temp_config.set_value("game", "speed_multiplier", 999.0)
+	temp_config.set_value("mechanics", "fuel_level", 250.0)
+
+	SettingsManager._run_migrations()
+	SettingsManager._validate_critical_values()
+
+	assert(SettingsManager.get_schema_version() == SettingsManager.CURRENT_SCHEMA_VERSION, "Save должен мигрировать до текущей schema")
+	assert(int(temp_config.get_value("statistics", "total_bankruptcies", 0)) == 7, "Legacy bankruptcies должны мигрировать в statistics")
+	assert(int(temp_config.get_value("display", "screen_index", 0)) == -1, "Спецрежим всех мониторов -1 должен сохраняться")
+	assert(str(temp_config.get_value("display", "graphics_mode", "")) == "32bit", "Некорректный graphics mode должен нормализоваться")
+	assert(int(temp_config.get_value("display", "fps_limit", 0)) == 240, "FPS должен clamp-иться до 240")
+	assert(int(temp_config.get_value("game", "coins", -1)) == 0, "Монеты не должны быть отрицательными после validation")
+	assert(str(temp_config.get_value("game", "current_crop", "")) == "wheat", "Неизвестная культура должна заменяться на wheat")
+	assert(is_equal_approx(float(temp_config.get_value("game", "speed_multiplier", 0.0)), 10.0), "Speed multiplier должен clamp-иться")
+	assert(is_equal_approx(float(temp_config.get_value("mechanics", "fuel_level", 0.0)), 100.0), "Fuel должен clamp-иться")
+	assert(str(temp_config.get_value("specialization", "selected_path", "")) == "none", "Migration v3 должна добавить specialization defaults")
+	assert(int(temp_config.get_value("prestige", "rank", -1)) == 0, "Migration v3 должна добавить Prestige defaults")
+
+	SettingsManager.config = real_config
+	print("  ✔ ТЕСТ 23 УСПЕШНО ПРОЙДЕН!")
+
 	print("\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ! СИСТЕМА ПОЛНОСТЬЮ ИСПРАВНА!")
 	quit(0)
