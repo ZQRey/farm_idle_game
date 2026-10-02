@@ -10,6 +10,7 @@ const ContractManager = preload("res://scripts/ContractManager.gd")
 const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const MarketManager = preload("res://scripts/MarketManager.gd")
 const QualityManager = preload("res://scripts/QualityManager.gd")
+const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 const FarmHQ = preload("res://scripts/FarmHQ.gd")
@@ -101,6 +102,10 @@ func _ready() -> void:
 	event_manager.police_resolved.connect(func():
 		tray_manager.is_police_active = false
 		farm_hq._update_ui()
+	)
+	event_manager.positive_event_started.connect(func(event_data: Dictionary):
+		farm_hq._update_ui()
+		print("[Main] Активирован позитивный бонус: ", event_data.get("title", "Событие"))
 	)
 	# 9. Таймер периодического автосохранения каждые 10 секунд
 	var autosave_timer: Timer = Timer.new()
@@ -252,6 +257,7 @@ func save_all_state() -> void:
 	InventoryManager.save_to_settings()
 	MarketManager.save_to_settings()
 	QualityManager.save_to_settings()
+	PositiveEventManager.save_to_settings()
 	if field != null:
 		field.save_field_state()
 	if event_manager != null:
