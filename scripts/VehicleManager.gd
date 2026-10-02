@@ -152,8 +152,8 @@ static func init_from_settings(legacy_flags: Dictionary = {}, legacy_conditions:
 	save_to_settings()
 
 static func write_to_config() -> void:
-	SettingsManager.config.set_value("garage2", "vehicles", vehicles)
-	SettingsManager.config.set_value("garage2", "active_by_role", active_by_role)
+	SettingsManager.config.set_value("garage2", "vehicles", vehicles.duplicate(true))
+	SettingsManager.config.set_value("garage2", "active_by_role", active_by_role.duplicate(true))
 	SettingsManager.config.set_value("garage2", "next_vehicle_id", next_vehicle_id)
 
 static func save_to_settings() -> void:
