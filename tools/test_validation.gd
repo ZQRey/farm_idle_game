@@ -257,8 +257,9 @@ func _init() -> void:
 	InventoryManager.total_harvest_stored_kg = 0.0
 	InventoryManager.total_overflow_kg = 0.0
 
-	var deposit_a: Dictionary = InventoryManager.deposit_crop("wheat", 400.0)
+	var deposit_a: Dictionary = InventoryManager.deposit_crop("wheat", 400.0, "A")
 	assert(is_equal_approx(float(deposit_a.get("stored_kg", 0.0)), 400.0), "400 кг пшеницы должны полностью поместиться")
+	assert(is_equal_approx(InventoryManager.get_stock_by_quality("wheat", "A"), 400.0), "Пшеница должна храниться как класс A")
 	assert(is_equal_approx(InventoryManager.get_total_stock(), 400.0), "На складе должно быть 400 кг")
 
 	var deposit_b: Dictionary = InventoryManager.deposit_crop("corn", 200.0)
