@@ -208,7 +208,7 @@ static func get_yield_multiplier() -> float:
 			bonus += 0.01 * float(level)
 	return 1.0 + min(bonus, 0.30)
 
-static func record_cycle_completion() -> Dictionary:
+static func record_cycle_completion(include_temporary_bonus: bool = true) -> Dictionary:
 	if not initialized:
 		return {"xp_awarded": 0, "level_ups": []}
 
@@ -217,7 +217,8 @@ static func record_cycle_completion() -> Dictionary:
 	for worker_id in workers:
 		var worker: Dictionary = workers[worker_id]
 		var profession: String = str(worker.get("profession", ""))
-		var gained: int = int(round(float(_xp_for_profession(profession)) * PositiveEventManager.get_worker_xp_multiplier()))
+		var xp_mult: float = PositiveEventManager.get_worker_xp_multiplier() if include_temporary_bonus else 1.0
+		var gained: int = int(round(float(_xp_for_profession(profession)) * xp_mult))
 		total_xp += gained
 		var before_level: int = int(worker.get("level", 1))
 		_add_worker_xp(worker_id, gained)
