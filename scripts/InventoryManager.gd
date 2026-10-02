@@ -221,10 +221,17 @@ static func _clamp_stock_to_capacity() -> void:
 	if total <= capacity or total <= 0.0:
 		return
 
-	# При миграции повреждённого/старого save пропорционально уменьшаем запас до ёмкости.
+	# При миграции повреждённого/старого save пропорционально уменьшаем все
+	# качественные партии, затем заново строим агрегированный stock.
 	var factor: float = capacity / total
 	for crop_id in CROP_IDS:
-		stock[crop_id] = get_stock(crop_id) * factor
+		if not quality_stock.has(crop_id):
+			continue
+		var bucket: Dictionary = quality_stock[crop_id]
+		for grade in QualityManager.GRADES:
+			bucket[grade] = max(0.0, float(bucket.get(grade, 0.0)) * factor)
+		quality_stock[crop_id] = bucket
+	_rebuild_aggregate_stock()
 
 static func _rebuild_crop_aggregate(crop_id: String) -> void:
 	var total: float = 0.0
