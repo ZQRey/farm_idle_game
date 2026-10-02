@@ -5,6 +5,7 @@ const GameManager = preload("res://scripts/GameManager.gd")
 const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const ContractManager = preload("res://scripts/ContractManager.gd")
 const InventoryManager = preload("res://scripts/InventoryManager.gd")
+const VehicleManager = preload("res://scripts/VehicleManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const AssetGenerator = preload("res://tools/AssetGenerator.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
@@ -414,7 +415,7 @@ func _update_fsm(delta: float) -> void:
 
 	# Расход бензина работающей техникой
 	if has_active_vehicle:
-		GameManager.consume_fuel(delta * 0.75)
+		GameManager.consume_fuel(delta * 0.75 * _get_active_fuel_multiplier())
 
 	# Коэффициенты скорости: топливо, износ, волонтёры
 	var fuel_speed_mod: float = 1.0 if GameManager.fuel_level > 0.0 else 0.25
@@ -616,12 +617,33 @@ func _scare_crow_away(crow: Sprite2D, threat_x: float = -9999.0) -> void:
 		c.set_meta("landing", false)
 	)
 
+func _uses_heavy_tractor() -> bool:
+	return VehicleManager.get_active_model_id(VehicleManager.ROLE_TRACTOR) == "tractor_heavy"
+
+func _uses_super_harvester() -> bool:
+	return VehicleManager.get_active_model_id(VehicleManager.ROLE_HARVESTER) == "harvester_super"
+
+func _uses_road_train() -> bool:
+	return VehicleManager.get_active_model_id(VehicleManager.ROLE_TRUCK) == "truck_road_train"
+
+func _get_active_fuel_multiplier() -> float:
+	match current_state:
+		State.PLOWING:
+			return VehicleManager.get_fuel_multiplier(VehicleManager.ROLE_TRACTOR)
+		State.WATERING:
+			return VehicleManager.get_fuel_multiplier(VehicleManager.ROLE_TANKER)
+		State.HARVESTING:
+			return VehicleManager.get_fuel_multiplier(VehicleManager.ROLE_HARVESTER)
+		State.HAULING:
+			return VehicleManager.get_fuel_multiplier(VehicleManager.ROLE_TRUCK)
+	return 1.0
+
 # ------------------------------------------------------------------------------
 # 1. PLOWING: Трактор вспахивает землю
 # ------------------------------------------------------------------------------
 func _start_plowing() -> void:
 	vehicle_sprite.visible = true
-	if GameManager.has_heavy_tractor:
+	if _uses_heavy_tractor():
 		vehicle_sprite.texture = tex_tractor_v2
 		vehicle_sprite.hframes = 2
 		vehicle_sprite.frame = 0
@@ -638,16 +660,16 @@ func _start_plowing() -> void:
 	particles_soil.emitting = true
 
 func _process_plowing(delta: float, speed: float) -> void:
-	var plowing_speed: float = speed * (1.6 if GameManager.has_heavy_tractor else 1.0)
+	var plowing_speed: float = speed * (1.6 if _uses_heavy_tractor() else 1.0)
 	vehicle_x += plowing_speed * delta
-	var spr_y: float = GROUND_Y - 40.0 if GameManager.has_heavy_tractor else GROUND_Y - 32.0
+	var spr_y: float = GROUND_Y - 40.0 if _uses_heavy_tractor() else GROUND_Y - 32.0
 	vehicle_sprite.position = Vector2(vehicle_x, spr_y)
 	particles_soil.position = Vector2(vehicle_x + 10, GROUND_Y - 4.0)
 
-	if GameManager.has_heavy_tractor:
+	if _uses_heavy_tractor():
 		vehicle_sprite.frame = int(anim_timer * 6.0) % 2
 
-	var plow_x: float = vehicle_x + (16.0 if GameManager.has_heavy_tractor else 8.0)
+	var plow_x: float = vehicle_x + (16.0 if _uses_heavy_tractor() else 8.0)
 	var seg_idx: int = int(plow_x / float(TILE_SIZE))
 	for i in range(max(0, seg_idx - 1), min(segment_count, seg_idx + 2)):
 		if soil_segments[i] == 0:
@@ -870,7 +892,7 @@ func _process_growing(delta: float) -> void:
 # ------------------------------------------------------------------------------
 func _start_harvesting() -> void:
 	vehicle_sprite.visible = true
-	if GameManager.has_super_harvester:
+	if _uses_super_harvester():
 		vehicle_sprite.texture = tex_harvester_v2
 		vehicle_sprite.hframes = 4
 		vehicle_sprite.frame = 0
@@ -885,16 +907,16 @@ func _start_harvesting() -> void:
 	vehicle_sprite.modulate = Color.WHITE
 
 func _process_harvesting(delta: float, speed: float) -> void:
-	var harv_speed: float = speed * (1.6 if GameManager.has_super_harvester else 0.9)
+	var harv_speed: float = speed * (1.6 if _uses_super_harvester() else 0.9)
 	vehicle_x += harv_speed * delta
-	var spr_y: float = GROUND_Y - 48.0 if GameManager.has_super_harvester else GROUND_Y - 40.0
+	var spr_y: float = GROUND_Y - 48.0 if _uses_super_harvester() else GROUND_Y - 40.0
 	vehicle_sprite.position = Vector2(vehicle_x, spr_y)
-	if GameManager.has_super_harvester:
+	if _uses_super_harvester():
 		vehicle_sprite.frame = int(anim_timer * 8.0) % 4
 	else:
 		vehicle_sprite.frame = int(anim_timer * 9.0) % 3
 
-	var cutter_x: float = vehicle_x + (54.0 if GameManager.has_super_harvester else 48.0)
+	var cutter_x: float = vehicle_x + (54.0 if _uses_super_harvester() else 48.0)
 	var seg: int = int(cutter_x / float(TILE_SIZE))
 	for i in range(max(0, seg - 1), min(segment_count, seg + 2)):
 		if crop_stages[i] != -1:
@@ -909,7 +931,7 @@ func _process_harvesting(delta: float, speed: float) -> void:
 # ------------------------------------------------------------------------------
 func _start_hauling() -> void:
 	vehicle_sprite.visible = true
-	if GameManager.has_road_train:
+	if _uses_road_train():
 		vehicle_sprite.texture = tex_truck_v2
 		vehicle_sprite.hframes = 4
 		vehicle_sprite.frame = 0
@@ -925,9 +947,9 @@ func _start_hauling() -> void:
 	truck_fill_stage = 0
 
 func _process_hauling(delta: float, speed: float) -> void:
-	var haul_speed: float = speed * (1.9 if GameManager.has_road_train else 1.1)
+	var haul_speed: float = speed * (1.9 if _uses_road_train() else 1.1)
 	vehicle_x += haul_speed * delta
-	var spr_y: float = GROUND_Y - 40.0 if GameManager.has_road_train else GROUND_Y - 32.0
+	var spr_y: float = GROUND_Y - 40.0 if _uses_road_train() else GROUND_Y - 32.0
 	vehicle_sprite.position = Vector2(vehicle_x, spr_y)
 
 	var frac: float = clamp(vehicle_x / float(screen_width), 0.0, 1.0)
@@ -943,7 +965,8 @@ func _finish_hauling_cycle() -> void:
 
 	# Мульти-монитор теперь увеличивает физический объём урожая, а не цену одной партии.
 	var mon_mult: float = GameManager.get_monitor_profit_multiplier()
-	var harvest_kg: float = InventoryManager.calculate_harvest_kg(mon_mult, GameManager.has_super_harvester)
+	var harvest_kg: float = InventoryManager.calculate_harvest_kg(mon_mult, false)
+	harvest_kg *= VehicleManager.get_capacity_multiplier(VehicleManager.ROLE_HARVESTER)
 	var deposit: Dictionary = InventoryManager.deposit_crop(crop_id, harvest_kg)
 	var stored_kg: float = float(deposit.get("stored_kg", 0.0))
 	var overflow_kg: float = float(deposit.get("overflow_kg", 0.0))
@@ -1311,7 +1334,7 @@ func _resume_state_visuals(target_state: State) -> void:
 			change_state(State.PLOWING)
 		State.PLOWING:
 			vehicle_sprite.visible = true
-			if GameManager.has_heavy_tractor:
+			if _uses_heavy_tractor():
 				vehicle_sprite.texture = tex_tractor_v2
 				vehicle_sprite.hframes = 2
 				vehicle_sprite.frame = 0
@@ -1358,7 +1381,7 @@ func _resume_state_visuals(target_state: State) -> void:
 			vehicle_sprite.visible = false
 		State.HARVESTING:
 			vehicle_sprite.visible = true
-			if GameManager.has_super_harvester:
+			if _uses_super_harvester():
 				vehicle_sprite.texture = tex_harvester_v2
 				vehicle_sprite.hframes = 4
 				vehicle_sprite.frame = 0
@@ -1374,7 +1397,7 @@ func _resume_state_visuals(target_state: State) -> void:
 				particles_soil.position = Vector2(vehicle_x + 16, GROUND_Y - 6.0)
 		State.HAULING:
 			vehicle_sprite.visible = true
-			if GameManager.has_road_train:
+			if _uses_road_train():
 				vehicle_sprite.texture = tex_truck_v2
 				vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 40.0)
 			else:
