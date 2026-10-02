@@ -465,6 +465,9 @@ static func get_machinery_repair_cost() -> int:
 static func get_building_repair_cost() -> int:
 	return max(1, int(round(35.0 * BuildingManager.get_repair_cost_multiplier())))
 
+static func get_emergency_repair_cost() -> int:
+	return max(1, int(round(30.0 * BuildingManager.get_repair_cost_multiplier())))
+
 static func repair_all_machinery() -> bool:
 	var cost: int = get_machinery_repair_cost()
 	if spend_coins(cost):
@@ -544,6 +547,7 @@ static func harvest_greenhouse() -> int:
 	var data: Dictionary = get_current_greenhouse_data()
 	var seed_c: int = int(data.get("seed_cost", 30)) * greenhouse_count
 	var gross: int = int(data.get("reward", 90)) * greenhouse_count
+	gross = int(round(float(gross) * BuildingManager.get_yield_multiplier()))
 
 	# Учитываем состояние теплицы
 	var condition_mult: float = 1.0 if greenhouse_condition >= 40.0 else 0.7
@@ -611,7 +615,7 @@ static func process_production_costs() -> Dictionary:
 	coins -= salary_payment
 	total_salaries_paid += salary_payment
 
-	if auto_refuel and fuel_level < 25.0:
+	if auto_refuel and fuel_level < max_fuel * 0.25:
 		var needed: float = max_fuel - fuel_level
 		var fuel_cost: int = calculate_refuel_cost(needed)
 		if coins >= fuel_cost:
