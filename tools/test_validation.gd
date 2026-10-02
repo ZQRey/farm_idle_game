@@ -7,6 +7,7 @@ const GameManager = preload("res://scripts/GameManager.gd")
 const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const ContractManager = preload("res://scripts/ContractManager.gd")
 const InventoryManager = preload("res://scripts/InventoryManager.gd")
+const MarketManager = preload("res://scripts/MarketManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 
@@ -16,6 +17,7 @@ func _init() -> void:
 	GameManager.init_from_settings()
 	ContractManager.init_from_settings()
 	InventoryManager.init_from_settings()
+	MarketManager.init_from_settings()
 
 	# 1. Тест: Множитель прибыли от мониторов
 	print("\n[ТЕСТ 1] Проверка множителя прибыли от мониторов:")
@@ -274,6 +276,65 @@ func _init() -> void:
 	InventoryManager.total_harvest_stored_kg = old_total_stored
 	InventoryManager.total_overflow_kg = old_total_overflow
 	InventoryManager.save_to_settings()
+
+	# 9. Тест: динамический рынок, история и правила автопродажи
+	print("\n[ТЕСТ 9] Проверка динамического рынка:")
+	var old_market_multipliers: Dictionary = MarketManager.crop_multipliers.duplicate(true)
+	var old_market_history: Dictionary = MarketManager.price_history.duplicate(true)
+	var old_market_rules: Dictionary = MarketManager.auto_sell_rules.duplicate(true)
+	var old_market_event: Dictionary = MarketManager.active_event.duplicate(true)
+	var old_auto_sold_kg: float = MarketManager.total_auto_sold_kg
+	var old_auto_sale_gross: int = MarketManager.total_auto_sale_gross
+	var old_last_tick: int = MarketManager.last_tick_at
+	var old_next_tick: int = MarketManager.next_tick_at
+
+	MarketManager.crop_multipliers = {
+		"wheat": 1.25,
+		"corn": 0.90,
+		"sunflower": 1.10,
+		"carrot": 1.00
+	}
+	MarketManager.active_event = {}
+	MarketManager.price_history = {
+		"wheat": [],
+		"corn": [],
+		"sunflower": [],
+		"carrot": []
+	}
+	MarketManager.set_auto_sell_rule("wheat", true, 55)
+	assert(is_equal_approx(MarketManager.get_effective_multiplier("wheat"), 1.25), "Пшеница должна иметь рыночный коэффициент 1.25")
+	assert(MarketManager.should_auto_sell("wheat", 55), "Автопродажа должна сработать при достижении порога")
+	assert(not MarketManager.should_auto_sell("wheat", 54), "Автопродажа не должна сработать ниже порога")
+
+	MarketManager.record_current_prices({
+		"wheat": 60,
+		"corn": 90,
+		"sunflower": 250,
+		"carrot": 560
+	})
+	assert(MarketManager.get_history("wheat").size() == 1, "История рынка должна получить точку цены")
+	assert(int(MarketManager.get_history("wheat")[0].get("price", 0)) == 60, "В истории должна сохраниться цена 60")
+
+	MarketManager.save_to_settings()
+	MarketManager.crop_multipliers["wheat"] = 0.70
+	MarketManager.auto_sell_rules["wheat"] = {"enabled": false, "min_price": 1}
+	MarketManager.init_from_settings()
+	assert(is_equal_approx(MarketManager.get_crop_multiplier("wheat"), 1.25), "Рыночный коэффициент должен восстановиться")
+	var restored_rule: Dictionary = MarketManager.get_auto_sell_rule("wheat")
+	assert(bool(restored_rule.get("enabled", false)), "Правило автопродажи должно восстановиться")
+	assert(int(restored_rule.get("min_price", 0)) == 55, "Порог автопродажи должен восстановиться")
+	print("  ✔ ТЕСТ 9 УСПЕШНО ПРОЙДЕН!")
+
+	# Возвращаем рыночное состояние пользователя.
+	MarketManager.crop_multipliers = old_market_multipliers
+	MarketManager.price_history = old_market_history
+	MarketManager.auto_sell_rules = old_market_rules
+	MarketManager.active_event = old_market_event
+	MarketManager.total_auto_sold_kg = old_auto_sold_kg
+	MarketManager.total_auto_sale_gross = old_auto_sale_gross
+	MarketManager.last_tick_at = old_last_tick
+	MarketManager.next_tick_at = old_next_tick
+	MarketManager.save_to_settings()
 
 	print("\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ! СИСТЕМА ПОЛНОСТЬЮ ИСПРАВНА!")
 	quit(0)
