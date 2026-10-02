@@ -83,8 +83,8 @@ static func init_from_settings() -> void:
 	refresh_board(false)
 
 static func write_to_config() -> void:
-	SettingsManager.config.set_value("contracts", "offers", offers)
-	SettingsManager.config.set_value("contracts", "active", active_contracts)
+	SettingsManager.config.set_value("contracts", "offers", offers.duplicate(true))
+	SettingsManager.config.set_value("contracts", "active", active_contracts.duplicate(true))
 	SettingsManager.config.set_value("contracts", "board_refresh_at", board_refresh_at)
 	SettingsManager.config.set_value("contracts", "next_id", next_contract_id)
 	SettingsManager.config.set_value("contracts", "total_completed", total_completed)
