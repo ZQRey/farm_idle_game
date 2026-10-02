@@ -161,6 +161,14 @@ static func process_ticks(tick_count: int) -> Dictionary:
 	save_to_settings()
 	return report
 
+static func consume_milk(amount_l: float) -> bool:
+	var requested: float = max(0.0, amount_l)
+	if requested <= 0.0 or milk_l + 0.001 < requested:
+		return false
+	milk_l = max(0.0, milk_l - requested)
+	save_to_settings()
+	return true
+
 static func sell_all_products() -> int:
 	var gross: int = int(round(eggs * EGG_PRICE + milk_l * MILK_PRICE))
 	if gross <= 0:
