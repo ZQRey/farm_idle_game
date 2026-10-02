@@ -75,7 +75,7 @@ static func init_from_settings() -> void:
 	save_to_settings()
 
 static func write_to_config() -> void:
-	SettingsManager.config.set_value("positive_events", "active_event", active_event)
+	SettingsManager.config.set_value("positive_events", "active_event", active_event.duplicate(true))
 	SettingsManager.config.set_value("positive_events", "total_triggered", total_triggered)
 	SettingsManager.config.set_value("positive_events", "rare_triggered", rare_triggered)
 
