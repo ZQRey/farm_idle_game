@@ -34,6 +34,10 @@ static func apply_screen(window: Window, screen_index: int) -> void:
 	var screen_count: int = DisplayServer.get_screen_count()
 	var main_win_id: int = DisplayServer.MAIN_WINDOW_ID
 
+	if screen_index == SCREEN_ALL_MONITORS and screen_count > 1 and not supports_single_window_all_monitors():
+		push_warning("[WindowManager] Мониторы имеют разную нижнюю границу. Режим одного окна на все экраны небезопасен; используется основной монитор.")
+		screen_index = DisplayServer.get_primary_screen()
+
 	var target_pos: Vector2i
 	var target_size: Vector2i
 
@@ -88,6 +92,19 @@ static func setup_mouse_passthrough(_width: int, _height: int, window_id: int = 
 	DisplayServer.window_set_mouse_passthrough(PackedVector2Array(), window_id)
 
 
+static func supports_single_window_all_monitors() -> bool:
+	var count: int = DisplayServer.get_screen_count()
+	if count <= 1:
+		return true
+	var first_rect: Rect2i = DisplayServer.screen_get_usable_rect(0)
+	var baseline_bottom: int = first_rect.position.y + first_rect.size.y
+	for i in range(1, count):
+		var rect: Rect2i = DisplayServer.screen_get_usable_rect(i)
+		var bottom: int = rect.position.y + rect.size.y
+		if abs(bottom - baseline_bottom) > 2:
+			return false
+	return true
+
 ## Возвращает список названий мониторов + опцию "Все мониторы одновременно"
 static func get_monitor_options() -> Array[Dictionary]:
 	var list: Array[Dictionary] = []
@@ -95,10 +112,12 @@ static func get_monitor_options() -> Array[Dictionary]:
 	var count: int = DisplayServer.get_screen_count()
 	var bonus_str: String = " (Прибыль x%d 💰)" % count if count >= 2 else ""
 
-	# Опция "Все мониторы одновременно"
+	# Одно широкое окно корректно работает только у экранов с общей нижней границей.
+	var all_supported: bool = supports_single_window_all_monitors()
 	list.append({
 		"id": SCREEN_ALL_MONITORS,
-		"title": "🌐 Все мониторы одновременно%s" % bonus_str
+		"title": ("🌐 Все мониторы одновременно%s" % bonus_str) if all_supported else "🌐 Все мониторы — недоступно для разноуровневой раскладки",
+		"enabled": all_supported
 	})
 	var primary: int = DisplayServer.get_primary_screen()
 
@@ -107,7 +126,8 @@ static func get_monitor_options() -> Array[Dictionary]:
 		var is_prim: String = " [Основной]" if i == primary else ""
 		list.append({
 			"id": i,
-			"title": "🖥 Монитор %d (%dx%d)%s" % [i + 1, usable.size.x, usable.size.y, is_prim]
+			"title": "🖥 Монитор %d (%dx%d)%s" % [i + 1, usable.size.x, usable.size.y, is_prim],
+			"enabled": true
 		})
 
 	return list
