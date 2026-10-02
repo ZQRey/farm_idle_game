@@ -17,6 +17,7 @@ const LivestockManager = preload("res://scripts/LivestockManager.gd")
 const ProcessingManager = preload("res://scripts/ProcessingManager.gd")
 const MultiFieldManager = preload("res://scripts/MultiFieldManager.gd")
 const SpecializationManager = preload("res://scripts/SpecializationManager.gd")
+const PrestigeManager = preload("res://scripts/PrestigeManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 
@@ -27,6 +28,7 @@ signal tractor_color_changed(color: Color)
 signal repair_requested
 signal strike_resolve_requested
 signal bankruptcy_requested
+signal prestige_requested
 signal police_fine_requested
 signal police_bribe_requested
 
@@ -84,6 +86,10 @@ var fields_container: VBoxContainer
 
 # Специализации фермы (динамическая вкладка)
 var specialization_container: VBoxContainer
+
+# Prestige (динамическая вкладка)
+var prestige_container: VBoxContainer
+var prestige_dialog: ConfirmationDialog
 
 # Магазин семян
 @onready var seed_container: VBoxContainer = $VBox/TabContainer/Магазин/ScrollSeeds/VBoxSeeds
@@ -187,6 +193,7 @@ func _ready() -> void:
 	_setup_processing_tab()
 	_setup_fields_tab()
 	_setup_specialization_tab()
+	_setup_prestige_tab()
 	_setup_monitors_list()
 	_setup_graphics_and_fps()
 	_setup_garage_and_decor()
@@ -2265,6 +2272,107 @@ func _refresh_specialization_ui() -> void:
 	]
 	specialization_container.add_child(current)
 
+func _setup_prestige_tab() -> void:
+	if prestige_container != null:
+		return
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.name = "Prestige"
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	tab_container.add_child(margin)
+
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
+
+	prestige_container = VBoxContainer.new()
+	prestige_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	prestige_container.add_theme_constant_override("separation", 10)
+	scroll.add_child(prestige_container)
+
+	prestige_dialog = ConfirmationDialog.new()
+	prestige_dialog.title = "Подтверждение Prestige"
+	prestige_dialog.ok_button_text = "Начать новый цикл"
+	prestige_dialog.cancel_button_text = "Отмена"
+	prestige_dialog.dialog_text = "Prestige сбросит текущую ферму до старта. Достижения, косметические титулы, специализация и Prestige-ранг сохранятся."
+	prestige_dialog.confirmed.connect(func():
+		prestige_requested.emit()
+	)
+	add_child(prestige_dialog)
+
+func _refresh_prestige_ui() -> void:
+	if prestige_container == null:
+		return
+
+	for child in prestige_container.get_children():
+		child.queue_free()
+
+	if not PrestigeManager.initialized:
+		var loading: Label = Label.new()
+		loading.text = "♻ Prestige загружается..."
+		prestige_container.add_child(loading)
+		return
+
+	var title: Label = Label.new()
+	title.add_theme_font_size_override("font_size", 16)
+	title.text = "♻ Prestige — поздняя мета-прогрессия"
+	prestige_container.add_child(title)
+
+	var summary: Label = Label.new()
+	summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	summary.text = PrestigeManager.get_summary()
+	prestige_container.add_child(summary)
+
+	var permanent: Label = Label.new()
+	permanent.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	permanent.text = "Каждый Prestige навсегда даёт: +3% урожайности, +2% к цене продажи, +1 п.п. offline efficiency и +50 стартовых монет. Максимум — %d рангов." % PrestigeManager.MAX_PRESTIGE_RANK
+	prestige_container.add_child(permanent)
+
+	var keep: Label = Label.new()
+	keep.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	keep.text = "Сохраняются: достижения и титулы, выбранная специализация, lifetime-статистика и Prestige. Сбрасываются: уровень фермы, деньги/долги, техника/тюнинг, работники, здания, склад, рынок, контракты, животные, переработка и дополнительные участки."
+	prestige_container.add_child(keep)
+
+	var requirements_title: Label = Label.new()
+	requirements_title.add_theme_font_size_override("font_size", 15)
+	requirements_title.text = "Требования текущего цикла"
+	prestige_container.add_child(requirements_title)
+
+	var missing: Array[String] = PrestigeManager.get_missing_requirements()
+	if missing.is_empty():
+		var ready: Label = Label.new()
+		ready.text = "✅ Ферма насыщена. Prestige доступен."
+		prestige_container.add_child(ready)
+	else:
+		for requirement in missing:
+			var line: Label = Label.new()
+			line.text = "○ %s" % requirement
+			line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			prestige_container.add_child(line)
+
+	var button: Button = Button.new()
+	if PrestigeManager.prestige_rank >= PrestigeManager.MAX_PRESTIGE_RANK:
+		button.text = "Prestige MAX ✔"
+		button.disabled = true
+	elif PrestigeManager.can_prestige():
+		button.text = "♻ Выполнить Prestige → ранг %d" % (PrestigeManager.prestige_rank + 1)
+		button.pressed.connect(func():
+			if prestige_dialog != null:
+				prestige_dialog.popup_centered()
+		)
+	else:
+		button.text = "Prestige пока недоступен"
+		button.disabled = true
+	prestige_container.add_child(button)
+
+	var history: Label = Label.new()
+	history.text = "Всего выполнено Prestige: %d" % PrestigeManager.total_prestiges
+	prestige_container.add_child(history)
+
 func _setup_repair_buttons() -> void:
 	var do_repair = func():
 		repair_requested.emit()
@@ -2293,6 +2401,7 @@ func _update_ui() -> void:
 	_refresh_processing_ui()
 	_refresh_fields_ui()
 	_refresh_specialization_ui()
+	_refresh_prestige_ui()
 
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins
