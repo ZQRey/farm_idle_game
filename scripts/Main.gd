@@ -11,6 +11,7 @@ const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const MarketManager = preload("res://scripts/MarketManager.gd")
 const QualityManager = preload("res://scripts/QualityManager.gd")
 const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
+const AchievementManager = preload("res://scripts/AchievementManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 const FarmHQ = preload("res://scripts/FarmHQ.gd")
@@ -34,6 +35,7 @@ func _ready() -> void:
 	if GameManager.has_barn:
 		InventoryManager.ensure_minimum_level(2)
 	MarketManager.init_from_settings()
+	AchievementManager.init_from_settings()
 	_record_market_prices()
 	_process_market_auto_sales()
 	farm_hq._update_ui()
@@ -157,6 +159,7 @@ func _on_tractor_color_changed(color: Color) -> void:
 
 func _on_harvest_completed(_coins_earned: int) -> void:
 	_process_market_auto_sales()
+	_check_achievements()
 	farm_hq._update_ui()
 
 func _on_market_timer() -> void:
@@ -165,6 +168,7 @@ func _on_market_timer() -> void:
 		_record_market_prices()
 	var sold_any: bool = _process_market_auto_sales()
 	if market_changed or sold_any:
+		_check_achievements()
 		farm_hq._update_ui()
 	else:
 		farm_hq._refresh_market_ui()
@@ -208,6 +212,17 @@ func _process_market_auto_sales() -> bool:
 		])
 
 	return sold_any
+
+func _check_achievements() -> void:
+	if not AchievementManager.initialized:
+		return
+	var unlocked_now: Array[Dictionary] = AchievementManager.evaluate_all()
+	for achievement in unlocked_now:
+		print("[Achievement] %s %s — титул: %s" % [
+			str(achievement.get("icon", "🏆")),
+			str(achievement.get("title", "Достижение")),
+			str(achievement.get("reward_title", ""))
+		])
 
 func _on_weather_changed(w_enum: int, w_name: String) -> void:
 	tray_manager.weather_string = w_name
@@ -258,6 +273,7 @@ func save_all_state() -> void:
 	MarketManager.save_to_settings()
 	QualityManager.save_to_settings()
 	PositiveEventManager.save_to_settings()
+	AchievementManager.save_to_settings()
 	if field != null:
 		field.save_field_state()
 	if event_manager != null:
