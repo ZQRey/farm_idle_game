@@ -2469,9 +2469,9 @@ func _update_ui() -> void:
 		if is_pol:
 			var fine_amt: int = 40 if GameManager.has_guard_dog else 80
 			var bribe_amt: int = max(10, int(GameManager.coins * 0.10))
-			btn_police_fine.text = "📋 Штраф (%d 🪙)" % fine_amt
+			btn_police_fine.text = "📋 Штраф проверки (%d 🪙)" % fine_amt
 			btn_police_fine.disabled = (GameManager.coins < fine_amt)
-			btn_police_bribe.text = "🤝 Взятка (%d 🪙)" % bribe_amt
+			btn_police_bribe.text = "🧾 Экспресс-проверка (%d 🪙)" % bribe_amt
 			btn_police_bribe.disabled = (GameManager.coins < bribe_amt)
 
 	# Кнопка урегулирования забастовки сеятелей
@@ -2712,8 +2712,8 @@ func _refresh_seeds_ui() -> void:
 		var required_level: int = ProgressionManager.get_crop_required_level(this_cid)
 
 		var lbl_info: Label = Label.new()
-		lbl_info.text = "%s\n⏱ Рост: %.0fc | 💰 Доход: +%d 🪙 | 🌱 Семена: %d 🪙/цикл | ⭐ Ур. %d" % [
-			c_data.name, c_data.growth_time, c_data.base_reward, c_data.seed_cost, required_level
+		lbl_info.text = "%s\n⏱ Рост: %.1f мин | 💰 База: +%d 🪙 / 100 кг | 🌱 Семена: %d 🪙/цикл | ⭐ Ур. %d" % [
+			c_data.name, float(c_data.growth_time) / 60.0, c_data.base_reward, c_data.seed_cost, required_level
 		]
 		lbl_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hbox.add_child(lbl_info)
