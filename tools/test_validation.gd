@@ -11,6 +11,7 @@ const MarketManager = preload("res://scripts/MarketManager.gd")
 const VehicleManager = preload("res://scripts/VehicleManager.gd")
 const WorkerManager = preload("res://scripts/WorkerManager.gd")
 const BuildingManager = preload("res://scripts/BuildingManager.gd")
+const QualityManager = preload("res://scripts/QualityManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 
@@ -233,6 +234,7 @@ func _init() -> void:
 	# 8. Тест: склад, переполнение и persistence
 	print("\n[ТЕСТ 8] Проверка склада урожая:")
 	var old_stock: Dictionary = InventoryManager.stock.duplicate(true)
+	var old_quality_stock: Dictionary = InventoryManager.quality_stock.duplicate(true)
 	var old_storage_level: int = InventoryManager.storage_level
 	var old_auto_sell: bool = InventoryManager.auto_sell_on_harvest
 	var old_total_stored: float = InventoryManager.total_harvest_stored_kg
@@ -243,6 +245,12 @@ func _init() -> void:
 		"corn": 0.0,
 		"sunflower": 0.0,
 		"carrot": 0.0
+	}
+	InventoryManager.quality_stock = {
+		"wheat": {"C": 0.0, "B": 0.0, "A": 0.0, "S": 0.0},
+		"corn": {"C": 0.0, "B": 0.0, "A": 0.0, "S": 0.0},
+		"sunflower": {"C": 0.0, "B": 0.0, "A": 0.0, "S": 0.0},
+		"carrot": {"C": 0.0, "B": 0.0, "A": 0.0, "S": 0.0}
 	}
 	InventoryManager.storage_level = 1
 	InventoryManager.auto_sell_on_harvest = false
@@ -274,6 +282,7 @@ func _init() -> void:
 
 	# Возвращаем складское состояние пользователя.
 	InventoryManager.stock = old_stock
+	InventoryManager.quality_stock = old_quality_stock
 	InventoryManager.storage_level = old_storage_level
 	InventoryManager.auto_sell_on_harvest = old_auto_sell
 	InventoryManager.total_harvest_stored_kg = old_total_stored
@@ -496,6 +505,50 @@ func _init() -> void:
 	assert(BuildingManager.get_level("fuel_station") == 1, "Уровень АЗС должен сохраниться")
 	assert(BuildingManager.get_level("agronomy_lab") == 1, "Уровень лаборатории должен сохраниться")
 	print("  ✔ ТЕСТ 13 УСПЕШНО ПРОЙДЕН!")
+
+	# 14. Тест: классы качества C/B/A/S, цена, склад и persistence
+	print("\n[ТЕСТ 14] Проверка качества урожая:")
+	var old_quality_totals: Dictionary = QualityManager.total_by_grade.duplicate(true)
+	var old_quality_last: Dictionary = QualityManager.last_quality_by_crop.duplicate(true)
+	var old_quality_best: Dictionary = QualityManager.best_grade_by_crop.duplicate(true)
+
+	assert(QualityManager.grade_from_score(40.0) == "C", "40 баллов должны давать класс C")
+	assert(QualityManager.grade_from_score(60.0) == "B", "60 баллов должны давать класс B")
+	assert(QualityManager.grade_from_score(80.0) == "A", "80 баллов должны давать класс A")
+	assert(QualityManager.grade_from_score(95.0) == "S", "95 баллов должны давать класс S")
+	assert(QualityManager.get_price_multiplier("S") > QualityManager.get_price_multiplier("A"), "S должен стоить дороже A")
+	assert(QualityManager.get_price_multiplier("A") > QualityManager.get_price_multiplier("B"), "A должен стоить дороже B")
+	assert(QualityManager.get_price_multiplier("C") < QualityManager.get_price_multiplier("B"), "C должен стоить дешевле B")
+	assert(QualityManager.meets_minimum("S", "A"), "S должен удовлетворять требованию A")
+	assert(not QualityManager.meets_minimum("B", "A"), "B не должен удовлетворять требованию A")
+
+	var clear_quality: Dictionary = QualityManager.calculate_quality("wheat", 0)
+	var hail_quality: Dictionary = QualityManager.calculate_quality("wheat", 2)
+	assert(float(clear_quality.get("score", 0.0)) > float(hail_quality.get("score", 0.0)), "Ясная погода должна давать качество выше града")
+
+	QualityManager.total_by_grade = {"C": 0.0, "B": 0.0, "A": 0.0, "S": 0.0}
+	QualityManager.last_quality_by_crop = {}
+	QualityManager.best_grade_by_crop = {}
+	QualityManager.register_harvest("wheat", "A", 125.0)
+	assert(is_equal_approx(QualityManager.get_total_kg_for_grade("A"), 125.0), "Статистика A должна учитывать 125 кг")
+	assert(QualityManager.get_last_grade("wheat") == "A", "Последний класс пшеницы должен быть A")
+	assert(QualityManager.get_best_grade("wheat") == "A", "Лучший класс пшеницы должен быть A")
+
+	QualityManager.save_to_settings()
+	QualityManager.total_by_grade = {}
+	QualityManager.last_quality_by_crop = {}
+	QualityManager.best_grade_by_crop = {}
+	QualityManager.init_from_settings()
+	assert(is_equal_approx(QualityManager.get_total_kg_for_grade("A"), 125.0), "Статистика качества должна восстановиться")
+	assert(QualityManager.get_last_grade("wheat") == "A", "Последний класс должен сохраниться")
+	print("  ✔ ТЕСТ 14 УСПЕШНО ПРОЙДЕН!")
+
+	# Возвращаем статистику качества пользователя.
+	QualityManager.total_by_grade = old_quality_totals
+	QualityManager.last_quality_by_crop = old_quality_last
+	QualityManager.best_grade_by_crop = old_quality_best
+	QualityManager.initialized = true
+	QualityManager.save_to_settings()
 
 	# Возвращаем инфраструктуру пользователя.
 	BuildingManager.levels = old_building_levels
