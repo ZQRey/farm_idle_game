@@ -99,6 +99,7 @@ var floating_label: Label
 # Позиции техники и анимации
 var vehicle_x: float = -100.0
 var vehicle_speed: float = 120.0
+const FUEL_BURN_LITERS_PER_SECOND: float = 0.12
 var truck_fill_stage: int = 0
 var anim_timer: float = 0.0
 
@@ -393,7 +394,7 @@ func _update_fsm(delta: float) -> void:
 			rw.visible = false
 
 	# 2. ПОЛОМКА ТЕХНИКИ: идет черный дым и пламя (только когда на поле работает техника)
-	var has_active_vehicle: bool = (current_state != State.GROWING and current_state != State.WATERING)
+	var has_active_vehicle: bool = (current_state != State.GROWING)
 	if current_state == State.SOWING and not GameManager.has_seeder_tractor:
 		has_active_vehicle = false
 
@@ -421,7 +422,7 @@ func _update_fsm(delta: float) -> void:
 
 	# Расход бензина работающей техникой
 	if has_active_vehicle:
-		GameManager.consume_fuel(delta * 0.75 * _get_active_fuel_multiplier())
+		GameManager.consume_fuel(delta * FUEL_BURN_LITERS_PER_SECOND * _get_active_fuel_multiplier())
 
 	# Коэффициенты скорости: топливо, износ, волонтёры
 	var fuel_speed_mod: float = 1.0 if GameManager.fuel_level > 0.0 else 0.25
