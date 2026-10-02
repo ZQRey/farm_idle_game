@@ -27,7 +27,7 @@ static var CROPS: Dictionary = {
 		"name": "Пшеница",
 		"row_index": 0,
 		"seed_cost": 10,
-		"growth_time": 7.0,
+		"growth_time": 870.0,
 		"base_reward": 40,
 		"unlocked": true
 	},
@@ -36,7 +36,7 @@ static var CROPS: Dictionary = {
 		"name": "Кукуруза",
 		"row_index": 1,
 		"seed_cost": 35,
-		"growth_time": 10.0,
+		"growth_time": 930.0,
 		"base_reward": 95,
 		"unlocked": false
 	},
@@ -45,7 +45,7 @@ static var CROPS: Dictionary = {
 		"name": "Подсолнух",
 		"row_index": 2,
 		"seed_cost": 80,
-		"growth_time": 14.0,
+		"growth_time": 990.0,
 		"base_reward": 230,
 		"unlocked": false
 	},
@@ -54,7 +54,7 @@ static var CROPS: Dictionary = {
 		"name": "Морковь",
 		"row_index": 3,
 		"seed_cost": 160,
-		"growth_time": 18.0,
+		"growth_time": 1050.0,
 		"base_reward": 560,
 		"unlocked": false
 	}
@@ -66,7 +66,7 @@ const GREENHOUSE_CROPS: Dictionary = {
 		"id": "bananas",
 		"name": "🍌 Бананы",
 		"seed_cost": 30,
-		"growth_time": 20.0,
+		"growth_time": 480.0,
 		"reward": 90,
 		"frame": 0
 	},
@@ -74,7 +74,7 @@ const GREENHOUSE_CROPS: Dictionary = {
 		"id": "oranges",
 		"name": "🍊 Апельсины",
 		"seed_cost": 50,
-		"growth_time": 26.0,
+		"growth_time": 600.0,
 		"reward": 160,
 		"frame": 1
 	},
@@ -82,7 +82,7 @@ const GREENHOUSE_CROPS: Dictionary = {
 		"id": "walnuts",
 		"name": "🥜 Грецкие орехи",
 		"seed_cost": 80,
-		"growth_time": 34.0,
+		"growth_time": 720.0,
 		"reward": 260,
 		"frame": 2
 	},
@@ -90,7 +90,7 @@ const GREENHOUSE_CROPS: Dictionary = {
 		"id": "mango",
 		"name": "🥭 Манго",
 		"seed_cost": 120,
-		"growth_time": 42.0,
+		"growth_time": 840.0,
 		"reward": 400,
 		"frame": 3
 	}
