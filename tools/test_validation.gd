@@ -19,6 +19,7 @@ const LivestockManager = preload("res://scripts/LivestockManager.gd")
 const ProcessingManager = preload("res://scripts/ProcessingManager.gd")
 const MultiFieldManager = preload("res://scripts/MultiFieldManager.gd")
 const SpecializationManager = preload("res://scripts/SpecializationManager.gd")
+const PrestigeManager = preload("res://scripts/PrestigeManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 
@@ -1114,6 +1115,73 @@ func _init() -> void:
 	SpecializationManager.save_to_settings()
 	ProgressionManager.farm_level = old_spec_level
 	ProgressionManager.xp = old_spec_xp
+	ProgressionManager.save_to_settings()
+
+	# 22. Тест: Prestige endgame requirements, permanent bonuses и persistence
+	print("\n[ТЕСТ 22] Проверка Prestige:")
+	var old_prestige_rank: int = PrestigeManager.prestige_rank
+	var old_prestige_total: int = PrestigeManager.total_prestiges
+	var old_prestige_last: int = PrestigeManager.last_prestige_at
+	var old_prestige_level: int = ProgressionManager.farm_level
+	var old_prestige_spec_tier: int = int(SettingsManager.config.get_value("specialization", "unlocked_tier", 0))
+	var old_prestige_fields: Variant = SettingsManager.config.get_value("multi_fields", "fields", {})
+	var old_prestige_coop: int = int(SettingsManager.config.get_value("livestock", "coop_level", 0))
+	var old_prestige_barn: int = int(SettingsManager.config.get_value("livestock", "barn_level", 0))
+	var old_prestige_processing: Variant = SettingsManager.config.get_value("processing", "facility_levels", {})
+
+	PrestigeManager.initialized = true
+	PrestigeManager.prestige_rank = 0
+	PrestigeManager.total_prestiges = 0
+	PrestigeManager.last_prestige_at = 0
+	ProgressionManager.farm_level = ProgressionManager.MAX_LEVEL
+	SettingsManager.config.set_value("specialization", "unlocked_tier", 3)
+	SettingsManager.config.set_value("multi_fields", "fields", {
+		"field_2": {"unlocked": true},
+		"field_3": {"unlocked": true}
+	})
+	SettingsManager.config.set_value("livestock", "coop_level", 3)
+	SettingsManager.config.set_value("livestock", "barn_level", 3)
+	SettingsManager.config.set_value("processing", "facility_levels", {
+		"flour_mill": 2,
+		"oil_press": 2,
+		"dairy": 2
+	})
+
+	assert(PrestigeManager.can_prestige(), "При насыщенном endgame Prestige должен быть доступен")
+	assert(PrestigeManager.get_missing_requirements().is_empty(), "При выполненных требованиях список недостающего должен быть пуст")
+	assert(PrestigeManager.award_prestige(), "Prestige должен успешно начислиться")
+	assert(PrestigeManager.prestige_rank == 1, "После первого Prestige ранг должен быть 1")
+	assert(PrestigeManager.total_prestiges == 1, "Lifetime prestige counter должен увеличиться")
+	assert(PrestigeManager.get_yield_multiplier() > 1.0, "Prestige должен давать постоянный yield bonus")
+	assert(PrestigeManager.get_sale_multiplier() > 1.0, "Prestige должен давать постоянный sale bonus")
+	assert(PrestigeManager.get_offline_efficiency_bonus() > 0.0, "Prestige должен улучшать offline efficiency")
+	assert(PrestigeManager.get_starting_coins() == 150, "Первый Prestige должен давать 150 стартовых монет")
+
+	PrestigeManager.save_to_settings()
+	PrestigeManager.prestige_rank = 0
+	PrestigeManager.total_prestiges = 0
+	PrestigeManager.last_prestige_at = 0
+	PrestigeManager.init_from_settings()
+	assert(PrestigeManager.prestige_rank == 1, "Prestige rank должен восстановиться")
+	assert(PrestigeManager.total_prestiges == 1, "Prestige lifetime counter должен восстановиться")
+
+	SettingsManager.config.set_value("livestock", "barn_level", 2)
+	assert(not PrestigeManager.can_prestige(), "Без MAX-коровника новый Prestige должен быть заблокирован")
+	assert(not PrestigeManager.get_missing_requirements().is_empty(), "Должно отображаться недостающее требование")
+	print("  ✔ ТЕСТ 22 УСПЕШНО ПРОЙДЕН!")
+
+	PrestigeManager.prestige_rank = old_prestige_rank
+	PrestigeManager.total_prestiges = old_prestige_total
+	PrestigeManager.last_prestige_at = old_prestige_last
+	PrestigeManager.initialized = true
+	PrestigeManager.save_to_settings()
+	ProgressionManager.farm_level = old_prestige_level
+	SettingsManager.config.set_value("specialization", "unlocked_tier", old_prestige_spec_tier)
+	SettingsManager.config.set_value("multi_fields", "fields", old_prestige_fields)
+	SettingsManager.config.set_value("livestock", "coop_level", old_prestige_coop)
+	SettingsManager.config.set_value("livestock", "barn_level", old_prestige_barn)
+	SettingsManager.config.set_value("processing", "facility_levels", old_prestige_processing)
+	SettingsManager.save_settings()
 	ProgressionManager.save_to_settings()
 
 	print("\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ! СИСТЕМА ПОЛНОСТЬЮ ИСПРАВНА!")
