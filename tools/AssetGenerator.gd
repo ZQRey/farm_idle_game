@@ -40,21 +40,27 @@ const DB32: Dictionary = {
 
 static var _texture_cache: Dictionary = {}
 
-## Возвращает ImageTexture без зависимости от импорта редактора
+## Возвращает импортированную Texture2D, совместимую с editor и exported PCK.
 static func get_texture(filename: String) -> Texture2D:
 	if _texture_cache.has(filename):
 		return _texture_cache[filename]
 
 	var path: String = OUTPUT_DIR + "/" + filename
-	if not FileAccess.file_exists(path):
-		generate_all_assets(true)
+	if not ResourceLoader.exists(path):
+		# Генерация допустима только в editor/dev окружении, где res:// доступен на запись.
+		if OS.has_feature("editor"):
+			generate_all_assets(true)
+		else:
+			push_error("[AssetGenerator] Отсутствует экспортированный ресурс: %s" % path)
+			return null
 
-	var img: Image = Image.load_from_file(path)
-	if img != null:
-		var tex: ImageTexture = ImageTexture.create_from_image(img)
+	var resource: Resource = ResourceLoader.load(path)
+	if resource is Texture2D:
+		var tex: Texture2D = resource as Texture2D
 		_texture_cache[filename] = tex
 		return tex
 
+	push_error("[AssetGenerator] Ресурс не является Texture2D: %s" % path)
 	return null
 
 ## Генерирует все ассеты при первом запуске или обновлении
