@@ -66,8 +66,8 @@ static func init_from_settings() -> void:
 	save_to_settings()
 
 static func write_to_config() -> void:
-	SettingsManager.config.set_value("inventory", "stock", stock)
-	SettingsManager.config.set_value("inventory", "quality_stock", quality_stock)
+	SettingsManager.config.set_value("inventory", "stock", stock.duplicate(true))
+	SettingsManager.config.set_value("inventory", "quality_stock", quality_stock.duplicate(true))
 	SettingsManager.config.set_value("inventory", "storage_level", storage_level)
 	SettingsManager.config.set_value("inventory", "auto_sell_on_harvest", auto_sell_on_harvest)
 	SettingsManager.config.set_value("inventory", "total_harvest_stored_kg", total_harvest_stored_kg)
