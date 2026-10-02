@@ -29,10 +29,18 @@ jobs:
           include-templates: true
 
       - name: Import project
-        run: godot --headless --path . --import --quit
+        shell: bash
+        run: |
+          set -o pipefail
+          godot --headless --path . --import --quit 2>&1 | tee godot-import.log
+          ! grep -E "SCRIPT ERROR:|Parse Error:|Compile Error:|Failed to load script" godot-import.log
 
       - name: Parse project
-        run: godot --headless --path . --editor --quit-after 1
+        shell: bash
+        run: |
+          set -o pipefail
+          godot --headless --path . --editor --quit-after 1 2>&1 | tee godot-parse.log
+          ! grep -E "SCRIPT ERROR:|Parse Error:|Compile Error:|Failed to load script" godot-parse.log
 
       - name: Run validation suite
         run: godot --headless --path . --script res://tools/test_validation.gd
@@ -53,7 +61,11 @@ jobs:
           include-templates: true
 
       - name: Import project
-        run: godot --headless --path . --import --quit
+        shell: bash
+        run: |
+          set -o pipefail
+          godot --headless --path . --import --quit 2>&1 | tee godot-export-import.log
+          ! grep -E "SCRIPT ERROR:|Parse Error:|Compile Error:|Failed to load script" godot-export-import.log
 
       - name: Build Windows x86_64
         run: |
