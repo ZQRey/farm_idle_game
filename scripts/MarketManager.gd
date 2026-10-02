@@ -39,6 +39,8 @@ static var auto_sell_rules: Dictionary = {
 }
 
 static var active_event: Dictionary = {}
+static var total_auto_sold_kg: float = 0.0
+static var total_auto_sale_gross: int = 0
 static var last_tick_at: int = 0
 static var next_tick_at: int = 0
 static var initialized: bool = false
@@ -78,6 +80,8 @@ static func init_from_settings() -> void:
 
 	var saved_event: Variant = SettingsManager.config.get_value("market", "active_event", {})
 	active_event = saved_event.duplicate(true) if typeof(saved_event) == TYPE_DICTIONARY else {}
+	total_auto_sold_kg = max(0.0, float(SettingsManager.config.get_value("market", "total_auto_sold_kg", 0.0)))
+	total_auto_sale_gross = max(0, int(SettingsManager.config.get_value("market", "total_auto_sale_gross", 0)))
 
 	last_tick_at = max(0, int(SettingsManager.config.get_value("market", "last_tick_at", 0)))
 	next_tick_at = max(0, int(SettingsManager.config.get_value("market", "next_tick_at", 0)))
@@ -105,6 +109,8 @@ static func write_to_config() -> void:
 	SettingsManager.config.set_value("market", "price_history", price_history)
 	SettingsManager.config.set_value("market", "auto_sell_rules", auto_sell_rules)
 	SettingsManager.config.set_value("market", "active_event", active_event)
+	SettingsManager.config.set_value("market", "total_auto_sold_kg", total_auto_sold_kg)
+	SettingsManager.config.set_value("market", "total_auto_sale_gross", total_auto_sale_gross)
 	SettingsManager.config.set_value("market", "last_tick_at", last_tick_at)
 	SettingsManager.config.set_value("market", "next_tick_at", next_tick_at)
 
@@ -219,6 +225,33 @@ static func should_auto_sell(crop_id: String, current_price_per_100kg: int) -> b
 	var rule: Dictionary = get_auto_sell_rule(crop_id)
 	return bool(rule.get("enabled", false)) and current_price_per_100kg >= int(rule.get("min_price", 0))
 
+static func record_current_prices(prices: Dictionary) -> void:
+	if not initialized:
+		return
+	for crop_id in CROP_IDS:
+		var entries: Array = price_history.get(crop_id, [])
+		if entries.is_empty():
+			entries.append({
+				"timestamp": _now(),
+				"multiplier": get_crop_multiplier(crop_id),
+				"effective_multiplier": get_effective_multiplier(crop_id),
+				"price": max(0, int(prices.get(crop_id, 0)))
+			})
+		else:
+			var last_entry: Dictionary = entries[entries.size() - 1]
+			last_entry["price"] = max(0, int(prices.get(crop_id, 0)))
+			last_entry["effective_multiplier"] = get_effective_multiplier(crop_id)
+			entries[entries.size() - 1] = last_entry
+		price_history[crop_id] = entries
+	save_to_settings()
+
+static func register_auto_sale(crop_id: String, amount_kg: float, gross_coins: int) -> void:
+	if not initialized or not CROP_IDS.has(crop_id):
+		return
+	total_auto_sold_kg += max(0.0, amount_kg)
+	total_auto_sale_gross += max(0, gross_coins)
+	save_to_settings()
+
 static func reset_all() -> void:
 	if not initialized:
 		return
@@ -231,6 +264,8 @@ static func reset_all() -> void:
 	price_history = _empty_history()
 	auto_sell_rules = _default_rules()
 	active_event = {}
+	total_auto_sold_kg = 0.0
+	total_auto_sale_gross = 0
 	last_tick_at = _now()
 	next_tick_at = last_tick_at + PRICE_TICK_SECONDS
 	_record_history(last_tick_at)
