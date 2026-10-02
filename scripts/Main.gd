@@ -160,6 +160,8 @@ func _on_market_timer() -> void:
 	var sold_any: bool = _process_market_auto_sales()
 	if market_changed or sold_any:
 		farm_hq._update_ui()
+	else:
+		farm_hq._refresh_market_ui()
 
 func _record_market_prices() -> void:
 	if not MarketManager.initialized:
