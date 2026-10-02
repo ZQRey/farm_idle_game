@@ -17,6 +17,7 @@ const LivestockManager = preload("res://scripts/LivestockManager.gd")
 const ProcessingManager = preload("res://scripts/ProcessingManager.gd")
 const MultiFieldManager = preload("res://scripts/MultiFieldManager.gd")
 const SpecializationManager = preload("res://scripts/SpecializationManager.gd")
+const PrestigeManager = preload("res://scripts/PrestigeManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 const FarmHQ = preload("res://scripts/FarmHQ.gd")
@@ -44,18 +45,19 @@ func _ready() -> void:
 	LivestockManager.init_from_settings()
 	ProcessingManager.init_from_settings()
 	MultiFieldManager.init_from_settings()
+	PrestigeManager.init_from_settings()
 	var offline_report: Dictionary = OfflineProgressManager.init_and_apply()
 	var livestock_offline: Dictionary = LivestockManager.process_offline_seconds(
 		int(offline_report.get("credited_seconds", 0)),
-		OfflineProgressManager.OFFLINE_EFFICIENCY
+		OfflineProgressManager.get_effective_efficiency()
 	)
 	var processing_offline: Dictionary = ProcessingManager.process_offline_seconds(
 		int(offline_report.get("credited_seconds", 0)),
-		OfflineProgressManager.OFFLINE_EFFICIENCY
+		OfflineProgressManager.get_effective_efficiency()
 	)
 	var fields_offline: Dictionary = MultiFieldManager.process_offline_seconds(
 		int(offline_report.get("credited_seconds", 0)),
-		OfflineProgressManager.OFFLINE_EFFICIENCY
+		OfflineProgressManager.get_effective_efficiency()
 	)
 	AchievementManager.init_from_settings()
 	if int(offline_report.get("cycles_completed", 0)) > 0:
@@ -124,6 +126,7 @@ func _ready() -> void:
 	farm_hq.repair_requested.connect(_on_call_mechanic)
 	farm_hq.strike_resolve_requested.connect(_on_resolve_strike)
 	farm_hq.bankruptcy_requested.connect(_on_bankruptcy_requested)
+	farm_hq.prestige_requested.connect(_on_prestige_requested)
 	farm_hq.police_fine_requested.connect(_on_police_fine)
 	farm_hq.police_bribe_requested.connect(_on_police_bribe)
 
@@ -342,6 +345,32 @@ func _on_bankruptcy_requested() -> void:
 	farm_hq._update_ui()
 	print("[Main] Ферма объявила банкротство: долги списаны, поле и техника сброшены!")
 
+func _on_prestige_requested() -> void:
+	if not PrestigeManager.can_prestige():
+		farm_hq._update_ui()
+		return
+	if not PrestigeManager.award_prestige():
+		return
+
+	field.reset_field_to_start()
+	event_manager.reset_all_events()
+	ContractManager.reset_all_contracts()
+	InventoryManager.reset_all()
+	MarketManager.reset_all()
+	QualityManager.reset_all()
+	LivestockManager.reset_all()
+	ProcessingManager.reset_all()
+	MultiFieldManager.reset_all()
+	GameManager.declare_bankruptcy(false)
+	ProgressionManager.reset_for_prestige()
+	GameManager.coins = PrestigeManager.get_starting_coins()
+	save_all_state()
+	farm_hq._refresh_contracts_ui()
+	farm_hq._refresh_storage_ui()
+	farm_hq._refresh_market_ui()
+	farm_hq._update_ui()
+	print("[Prestige] Новый цикл фермы: ", PrestigeManager.get_summary())
+
 func _on_season_changed(_season: GameManager.Season, season_name: String) -> void:
 	tray_manager.season_string = season_name
 	if field != null:
@@ -372,6 +401,7 @@ func save_all_state() -> void:
 	ProcessingManager.save_to_settings()
 	MultiFieldManager.save_to_settings()
 	SpecializationManager.save_to_settings()
+	PrestigeManager.save_to_settings()
 	if field != null:
 		field.save_field_state()
 	if event_manager != null:
