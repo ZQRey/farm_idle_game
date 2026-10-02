@@ -1086,6 +1086,20 @@ func _init() -> void:
 	assert(SpecializationManager.get_aux_field_cycle_multiplier() < 1.0, "Третья ступень должна ускорять автономные участки")
 	assert(SpecializationManager.get_available_points() == 0, "После трёх ступеней свободных очков не должно остаться")
 
+	# Прямо проверяем эффекты двух остальных взаимоисключающих веток.
+	SpecializationManager.selected_path = SpecializationManager.PATH_LIVESTOCK
+	SpecializationManager.unlocked_tier = 3
+	assert(SpecializationManager.get_livestock_feed_multiplier() < 0.90, "Животновод 3 ступени должен заметно снижать расход корма")
+	assert(SpecializationManager.get_livestock_output_multiplier() >= 1.35, "Животновод 3 ступени должен повышать продукцию на 35%")
+
+	SpecializationManager.selected_path = SpecializationManager.PATH_PROCESSING
+	SpecializationManager.unlocked_tier = 3
+	assert(SpecializationManager.get_processing_output_multiplier() >= 1.35, "Переработчик 3 ступени должен повышать выход на 35%")
+	assert(SpecializationManager.get_processing_sale_multiplier() >= 1.12, "Переработчик 3 ступени должен повышать цену готовой продукции")
+
+	# Persistence проверяем на исходно выбранной ветке растениеводства.
+	SpecializationManager.selected_path = SpecializationManager.PATH_CROPS
+	SpecializationManager.unlocked_tier = 3
 	SpecializationManager.save_to_settings()
 	SpecializationManager.selected_path = SpecializationManager.PATH_NONE
 	SpecializationManager.unlocked_tier = 0
