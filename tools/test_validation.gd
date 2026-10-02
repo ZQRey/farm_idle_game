@@ -9,6 +9,7 @@ const ContractManager = preload("res://scripts/ContractManager.gd")
 const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const MarketManager = preload("res://scripts/MarketManager.gd")
 const VehicleManager = preload("res://scripts/VehicleManager.gd")
+const WorkerManager = preload("res://scripts/WorkerManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 
@@ -412,6 +413,50 @@ func _init() -> void:
 	assert(VehicleManager.get_upgrade_level(restored_tractor_id, "fuel_system") == 1, "Уровень топливной системы должен сохраниться")
 	assert(VehicleManager.get_upgrade_level(restored_tractor_id, "electronics") == 1, "Уровень электроники должен сохраниться")
 	print("  ✔ ТЕСТ 11 УСПЕШНО ПРОЙДЕН!")
+
+	# 12. Тест: постоянные работники, профессии, уровни и persistence
+	print("\n[ТЕСТ 12] Проверка системы работников:")
+	var old_workers: Dictionary = WorkerManager.workers.duplicate(true)
+	var old_next_worker_id: int = WorkerManager.next_worker_id
+	var old_total_hired: int = WorkerManager.total_hired
+	var old_total_levels: int = WorkerManager.total_levels_gained
+
+	WorkerManager.initialized = true
+	WorkerManager.reset_to_defaults()
+	assert(WorkerManager.get_worker_count() == 4, "Стартовый штат должен содержать 4 работников")
+	assert(WorkerManager.get_workers_by_profession(WorkerManager.PROF_SOWER).size() == 1, "В штате должен быть сеятель")
+	assert(WorkerManager.get_phase_speed_multiplier("sowing") > 1.0, "Сеятель должен ускорять фазу сева")
+
+	var salary_before_hire: int = WorkerManager.get_total_salary_per_cycle()
+	var agronomist: Dictionary = WorkerManager.hire_worker(WorkerManager.PROF_AGRONOMIST)
+	assert(not agronomist.is_empty(), "Агроном должен успешно наниматься")
+	assert(WorkerManager.get_worker_count() == 5, "После найма должно быть 5 работников")
+	assert(WorkerManager.get_total_salary_per_cycle() > salary_before_hire, "Найм должен увеличить фонд оплаты труда")
+	assert(WorkerManager.get_phase_speed_multiplier("growing") > 1.0, "Агроном должен ускорять рост")
+	assert(WorkerManager.get_yield_multiplier() > 1.0, "Специалисты должны повышать урожайность")
+
+	var agronomist_id: String = str(agronomist.get("id", ""))
+	for i in range(7):
+		WorkerManager.record_cycle_completion()
+	var agronomist_after: Dictionary = WorkerManager.workers.get(agronomist_id, {})
+	assert(int(agronomist_after.get("level", 1)) >= 2, "Агроном должен повышать уровень от завершённых циклов")
+
+	WorkerManager.save_to_settings()
+	WorkerManager.workers = {}
+	WorkerManager.init_from_settings()
+	assert(WorkerManager.get_worker_count() == 5, "Состав работников должен восстановиться")
+	var restored_agronomists: Array[Dictionary] = WorkerManager.get_workers_by_profession(WorkerManager.PROF_AGRONOMIST)
+	assert(restored_agronomists.size() == 1, "Агроном должен восстановиться после загрузки")
+	assert(int(restored_agronomists[0].get("level", 1)) >= 2, "Уровень агронома должен сохраниться")
+	print("  ✔ ТЕСТ 12 УСПЕШНО ПРОЙДЕН!")
+
+	# Возвращаем штат пользователя.
+	WorkerManager.workers = old_workers
+	WorkerManager.next_worker_id = old_next_worker_id
+	WorkerManager.total_hired = old_total_hired
+	WorkerManager.total_levels_gained = old_total_levels
+	WorkerManager.initialized = true
+	WorkerManager.save_to_settings()
 
 	# Возвращаем автопарк пользователя.
 	VehicleManager.vehicles = old_vehicles

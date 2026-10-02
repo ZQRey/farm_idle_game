@@ -6,6 +6,7 @@ const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const ContractManager = preload("res://scripts/ContractManager.gd")
 const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const VehicleManager = preload("res://scripts/VehicleManager.gd")
+const WorkerManager = preload("res://scripts/WorkerManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const AssetGenerator = preload("res://tools/AssetGenerator.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
@@ -720,7 +721,8 @@ func _start_sowing() -> void:
 
 func _process_sowing(delta: float, speed: float) -> void:
 	if GameManager.has_seeder_tractor:
-		vehicle_x += speed * 1.2 * VehicleManager.get_speed_multiplier(VehicleManager.ROLE_TRACTOR) * delta
+		var operator_mult: float = WorkerManager.get_phase_speed_multiplier("sowing")
+		vehicle_x += speed * 1.2 * VehicleManager.get_speed_multiplier(VehicleManager.ROLE_TRACTOR) * operator_mult * delta
 		vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
 		particles_seed.position = Vector2(vehicle_x + 16, GROUND_Y - 10.0)
 
@@ -788,6 +790,7 @@ func _process_sowing(delta: float, speed: float) -> void:
 			# Дождь не идет: возвращение и нормальный сев
 			var all_finished: bool = true
 			var lead_x: float = 0.0
+			var worker_sow_mult: float = WorkerManager.get_phase_speed_multiplier("sowing")
 			particles_seed.emitting = true
 
 			for i in range(seeder_workers.size()):
@@ -810,7 +813,7 @@ func _process_sowing(delta: float, speed: float) -> void:
 						w.flip_h = false
 
 				w.flip_h = false
-				w.position.x += speed * 0.7 * delta
+				w.position.x += speed * 0.7 * worker_sow_mult * delta
 				w.frame = int(anim_timer * 5.0 + i) % 4
 				lead_x = max(lead_x, w.position.x)
 
@@ -854,7 +857,8 @@ func _start_watering() -> void:
 	particles_water.emitting = true
 
 func _process_watering(delta: float, speed: float) -> void:
-	vehicle_x += speed * VehicleManager.get_speed_multiplier(VehicleManager.ROLE_TANKER) * delta
+	var worker_mult: float = WorkerManager.get_phase_speed_multiplier("watering")
+	vehicle_x += speed * VehicleManager.get_speed_multiplier(VehicleManager.ROLE_TANKER) * worker_mult * delta
 	vehicle_sprite.position = Vector2(vehicle_x, GROUND_Y - 32.0)
 	particles_water.position = Vector2(vehicle_x + 4.0, GROUND_Y - 12.0)
 
@@ -876,7 +880,7 @@ func _start_growing() -> void:
 	state_timer = 0.0
 
 func _process_growing(delta: float) -> void:
-	var growth_rate: float = 1.30 if current_weather_id == 1 else weather_speed_mod
+	var growth_rate: float = (1.30 if current_weather_id == 1 else weather_speed_mod) * WorkerManager.get_phase_speed_multiplier("growing")
 	state_timer += delta * growth_rate
 	var crop_data: Dictionary = GameManager.get_current_crop_data()
 	var total_time: float = float(crop_data.get("growth_time", 8.0))
@@ -909,7 +913,7 @@ func _start_harvesting() -> void:
 	vehicle_sprite.modulate = Color.WHITE
 
 func _process_harvesting(delta: float, speed: float) -> void:
-	var harv_speed: float = speed * VehicleManager.get_speed_multiplier(VehicleManager.ROLE_HARVESTER)
+	var harv_speed: float = speed * VehicleManager.get_speed_multiplier(VehicleManager.ROLE_HARVESTER) * WorkerManager.get_phase_speed_multiplier("harvesting")
 	vehicle_x += harv_speed * delta
 	var spr_y: float = GROUND_Y - 48.0 if _uses_super_harvester() else GROUND_Y - 40.0
 	vehicle_sprite.position = Vector2(vehicle_x, spr_y)
@@ -949,7 +953,7 @@ func _start_hauling() -> void:
 	truck_fill_stage = 0
 
 func _process_hauling(delta: float, speed: float) -> void:
-	var haul_speed: float = speed * VehicleManager.get_speed_multiplier(VehicleManager.ROLE_TRUCK)
+	var haul_speed: float = speed * VehicleManager.get_speed_multiplier(VehicleManager.ROLE_TRUCK) * WorkerManager.get_phase_speed_multiplier("hauling")
 	vehicle_x += haul_speed * delta
 	var spr_y: float = GROUND_Y - 40.0 if _uses_road_train() else GROUND_Y - 32.0
 	vehicle_sprite.position = Vector2(vehicle_x, spr_y)
@@ -969,6 +973,7 @@ func _finish_hauling_cycle() -> void:
 	var mon_mult: float = GameManager.get_monitor_profit_multiplier()
 	var harvest_kg: float = InventoryManager.calculate_harvest_kg(mon_mult, false)
 	harvest_kg *= VehicleManager.get_capacity_multiplier(VehicleManager.ROLE_HARVESTER)
+	harvest_kg *= WorkerManager.get_yield_multiplier()
 	var deposit: Dictionary = InventoryManager.deposit_crop(crop_id, harvest_kg)
 	var stored_kg: float = float(deposit.get("stored_kg", 0.0))
 	var overflow_kg: float = float(deposit.get("overflow_kg", 0.0))
@@ -1003,6 +1008,11 @@ func _finish_hauling_cycle() -> void:
 			bonus_text += " [Переполнение %.0f кг → 70%%]" % overflow_kg
 
 	GameManager.total_harvested += 1
+
+	var worker_progress: Dictionary = WorkerManager.record_cycle_completion()
+	var worker_level_ups: Array = worker_progress.get("level_ups", [])
+	if not worker_level_ups.is_empty():
+		bonus_text += " [Работники +ур.]"
 
 	# Долгосрочная прогрессия фермы: опыт и репутация за каждый полный цикл поля.
 	var progression_result: Dictionary = ProgressionManager.add_harvest_progress(crop_id)
