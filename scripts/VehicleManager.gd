@@ -2,6 +2,7 @@ class_name VehicleManager
 extends RefCounted
 
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
+const BuildingManager = preload("res://scripts/BuildingManager.gd")
 
 const ROLE_TRACTOR: String = "tractor"
 const ROLE_TANKER: String = "tanker"
@@ -251,7 +252,7 @@ static func get_active_reliability(role: String) -> float:
 	var upgrades: Dictionary = _get_vehicle_upgrades(v)
 	var tires: int = int(upgrades.get("tires", 0))
 	var electronics: int = int(upgrades.get("electronics", 0))
-	var bonus: float = tires * 0.015 + electronics * 0.02
+	var bonus: float = tires * 0.015 + electronics * 0.02 + BuildingManager.get_reliability_bonus()
 	return clampf(float(v.get("reliability", 0.85)) + bonus, 0.05, 0.99)
 
 static func get_active_mileage(role: String) -> float:
@@ -323,7 +324,7 @@ static func get_vehicle_effective_stats(vehicle_id: String) -> Dictionary:
 		"speed_mult": float(v.get("speed_mult", 1.0)) * (1.0 + engine * 0.04 + tires * 0.01 + transmission * 0.03),
 		"fuel_mult": max(0.55, float(v.get("fuel_mult", 1.0)) * (1.0 - fuel_system * 0.04 - transmission * 0.02)),
 		"capacity_mult": float(v.get("capacity_mult", 1.0)) * (1.0 + engine * 0.02),
-		"reliability": clampf(float(v.get("reliability", 0.85)) + tires * 0.015 + electronics * 0.02, 0.05, 0.99)
+		"reliability": clampf(float(v.get("reliability", 0.85)) + tires * 0.015 + electronics * 0.02 + BuildingManager.get_reliability_bonus(), 0.05, 0.99)
 	}
 
 static func add_cycle_usage(role: String, mileage_km: float, condition_loss: float) -> void:
