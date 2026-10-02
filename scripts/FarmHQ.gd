@@ -2901,7 +2901,8 @@ func _setup_monitors_list() -> void:
 		var opt: Dictionary = options[i]
 		opt_monitors.add_item(opt.title, i)
 		opt_monitors.set_item_metadata(i, opt.id)
-		if opt.id == current_screen:
+		opt_monitors.set_item_disabled(i, not bool(opt.get("enabled", true)))
+		if opt.id == current_screen and bool(opt.get("enabled", true)):
 			select_idx = i
 
 	opt_monitors.selected = select_idx
