@@ -15,6 +15,7 @@ const AchievementManager = preload("res://scripts/AchievementManager.gd")
 const OfflineProgressManager = preload("res://scripts/OfflineProgressManager.gd")
 const LivestockManager = preload("res://scripts/LivestockManager.gd")
 const ProcessingManager = preload("res://scripts/ProcessingManager.gd")
+const MultiFieldManager = preload("res://scripts/MultiFieldManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 const FarmHQ = preload("res://scripts/FarmHQ.gd")
@@ -40,12 +41,17 @@ func _ready() -> void:
 	MarketManager.init_from_settings()
 	LivestockManager.init_from_settings()
 	ProcessingManager.init_from_settings()
+	MultiFieldManager.init_from_settings()
 	var offline_report: Dictionary = OfflineProgressManager.init_and_apply()
 	var livestock_offline: Dictionary = LivestockManager.process_offline_seconds(
 		int(offline_report.get("credited_seconds", 0)),
 		OfflineProgressManager.OFFLINE_EFFICIENCY
 	)
 	var processing_offline: Dictionary = ProcessingManager.process_offline_seconds(
+		int(offline_report.get("credited_seconds", 0)),
+		OfflineProgressManager.OFFLINE_EFFICIENCY
+	)
+	var fields_offline: Dictionary = MultiFieldManager.process_offline_seconds(
 		int(offline_report.get("credited_seconds", 0)),
 		OfflineProgressManager.OFFLINE_EFFICIENCY
 	)
@@ -71,6 +77,12 @@ func _ready() -> void:
 			float(offline_outputs.get("oil", 0.0)),
 			float(offline_outputs.get("cheese", 0.0)),
 			int(processing_offline.get("coins", 0))
+		])
+	if int(fields_offline.get("cycles_completed", 0)) > 0:
+		print("[Fields Offline] %d циклов | %.0f кг | %+d 🪙" % [
+			int(fields_offline.get("cycles_completed", 0)),
+			float(fields_offline.get("harvested_kg", 0.0)),
+			int(fields_offline.get("net_coins", 0))
 		])
 	_record_market_prices()
 	_process_market_auto_sales()
@@ -166,7 +178,14 @@ func _ready() -> void:
 	processing_timer.timeout.connect(_on_processing_timer)
 	add_child(processing_timer)
 
-	# 12. Рыночный цикл: проверка цены и правил автопродажи каждые 15 секунд.
+	# 12. Дополнительные участки: прогресс независимых производственных зон.
+	var fields_timer: Timer = Timer.new()
+	fields_timer.wait_time = 30.0
+	fields_timer.autostart = true
+	fields_timer.timeout.connect(_on_fields_timer)
+	add_child(fields_timer)
+
+	# 13. Рыночный цикл: проверка цены и правил автопродажи каждые 15 секунд.
 	var market_timer: Timer = Timer.new()
 	market_timer.wait_time = 15.0
 	market_timer.autostart = true
@@ -221,6 +240,12 @@ func _on_livestock_timer() -> void:
 func _on_processing_timer() -> void:
 	var report: Dictionary = ProcessingManager.process_due_ticks()
 	if int(report.get("ticks", 0)) > 0:
+		_check_achievements()
+		farm_hq._update_ui()
+
+func _on_fields_timer() -> void:
+	var report: Dictionary = MultiFieldManager.process_due_time()
+	if int(report.get("cycles_completed", 0)) > 0:
 		_check_achievements()
 		farm_hq._update_ui()
 
@@ -308,6 +333,7 @@ func _on_bankruptcy_requested() -> void:
 	QualityManager.reset_all()
 	LivestockManager.reset_all()
 	ProcessingManager.reset_all()
+	MultiFieldManager.reset_all()
 	farm_hq._refresh_contracts_ui()
 	farm_hq._refresh_storage_ui()
 	farm_hq._refresh_market_ui()
@@ -342,6 +368,7 @@ func save_all_state() -> void:
 	OfflineProgressManager.save_to_settings()
 	LivestockManager.save_to_settings()
 	ProcessingManager.save_to_settings()
+	MultiFieldManager.save_to_settings()
 	if field != null:
 		field.save_field_state()
 	if event_manager != null:

@@ -17,6 +17,7 @@ const AchievementManager = preload("res://scripts/AchievementManager.gd")
 const OfflineProgressManager = preload("res://scripts/OfflineProgressManager.gd")
 const LivestockManager = preload("res://scripts/LivestockManager.gd")
 const ProcessingManager = preload("res://scripts/ProcessingManager.gd")
+const MultiFieldManager = preload("res://scripts/MultiFieldManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 
@@ -939,6 +940,119 @@ func _init() -> void:
 	LivestockManager.milk_l = old_processing_milk
 	InventoryManager.save_to_settings()
 	LivestockManager.save_to_settings()
+	GameManager.save_to_settings()
+
+	# 20. Тест: несколько независимых участков, прогресс, монитор и persistence
+	print("\n[ТЕСТ 20] Проверка нескольких участков:")
+	var old_fields_state: Dictionary = MultiFieldManager.fields.duplicate(true)
+	var old_fields_last_update: int = MultiFieldManager.last_update_at
+	var old_fields_cycles: int = MultiFieldManager.total_aux_cycles
+	var old_fields_harvest: float = MultiFieldManager.total_aux_harvest_kg
+	var old_fields_coins: int = GameManager.coins
+	var old_fields_total_earned: int = GameManager.total_coins_earned
+	var old_fields_harvest_count: int = GameManager.total_harvested
+	var old_fields_inventory_stock: Dictionary = InventoryManager.stock.duplicate(true)
+	var old_fields_quality_stock: Dictionary = InventoryManager.quality_stock.duplicate(true)
+	var old_fields_auto_sell: bool = InventoryManager.auto_sell_on_harvest
+	var old_fields_quality_totals: Dictionary = QualityManager.total_by_grade.duplicate(true)
+	var old_fields_quality_last: Dictionary = QualityManager.last_quality_by_crop.duplicate(true)
+	var old_fields_quality_best: Dictionary = QualityManager.best_grade_by_crop.duplicate(true)
+	var old_fields_level: int = ProgressionManager.farm_level
+	var old_fields_xp: int = ProgressionManager.xp
+	var old_fields_rep: int = ProgressionManager.reputation
+	var old_fields_lifetime_xp: int = ProgressionManager.lifetime_xp
+	var old_contract_offers: Array = ContractManager.offers.duplicate(true)
+	var old_contract_active: Array = ContractManager.active_contracts.duplicate(true)
+	var old_contract_completed: int = ContractManager.total_completed
+	var old_contract_coins: int = ContractManager.total_contract_coins
+
+	MultiFieldManager.initialized = true
+	MultiFieldManager.fields = {
+		"field_2": {
+			"id": "field_2", "name": "Северный участок", "unlocked": true,
+			"level": 1, "crop_id": "wheat", "monitor_index": 1,
+			"progress_seconds": 0.0, "cycles_completed": 0, "total_harvest_kg": 0.0
+		},
+		"field_3": {
+			"id": "field_3", "name": "Дальний участок", "unlocked": false,
+			"level": 1, "crop_id": "wheat", "monitor_index": 2,
+			"progress_seconds": 0.0, "cycles_completed": 0, "total_harvest_kg": 0.0
+		}
+	}
+	MultiFieldManager.total_aux_cycles = 0
+	MultiFieldManager.total_aux_harvest_kg = 0.0
+	GameManager.coins = 5000
+	InventoryManager.auto_sell_on_harvest = false
+	InventoryManager.stock = {
+		"wheat": 0.0, "corn": 0.0, "sunflower": 0.0, "carrot": 0.0
+	}
+	InventoryManager.quality_stock = {
+		"wheat": {"C": 0.0, "B": 0.0, "A": 0.0, "S": 0.0},
+		"corn": {"C": 0.0, "B": 0.0, "A": 0.0, "S": 0.0},
+		"sunflower": {"C": 0.0, "B": 0.0, "A": 0.0, "S": 0.0},
+		"carrot": {"C": 0.0, "B": 0.0, "A": 0.0, "S": 0.0}
+	}
+	ContractManager.offers = []
+	ContractManager.active_contracts = []
+
+	assert(MultiFieldManager.is_unlocked("field_2"), "Северный участок должен быть открыт")
+	assert(not MultiFieldManager.is_unlocked("field_3"), "Дальний участок должен оставаться закрыт")
+	assert(is_equal_approx(MultiFieldManager.get_cycle_seconds("field_2"), 1080.0), "Участок 1 уровня должен иметь 18-минутный цикл")
+	assert(is_equal_approx(MultiFieldManager.get_yield_multiplier("field_2"), 1.0), "Участок 1 уровня должен иметь x1 урожайность")
+	assert(MultiFieldManager.set_monitor("field_2", 0), "Должна сохраняться привязка участка к монитору")
+	assert(int(MultiFieldManager.get_field("field_2").get("monitor_index", -1)) == 0, "Monitor assignment должен измениться")
+
+	var partial_fields_report: Dictionary = MultiFieldManager.process_elapsed(540.0, 1.0)
+	assert(int(partial_fields_report.get("cycles_completed", 0)) == 0, "Половина цикла не должна завершать урожай")
+	assert(MultiFieldManager.get_progress_ratio("field_2") > 0.49, "Прогресс должен накопиться примерно до 50%")
+
+	var coins_before_aux_cycle: int = GameManager.coins
+	var complete_fields_report: Dictionary = MultiFieldManager.process_elapsed(540.0, 1.0)
+	assert(int(complete_fields_report.get("cycles_completed", 0)) == 1, "Вторая половина должна завершить один автономный цикл")
+	assert(InventoryManager.get_stock("wheat") > 0.0, "Урожай автономного участка должен попасть на общий склад")
+	assert(GameManager.coins < coins_before_aux_cycle, "Автономный участок должен оплачивать эксплуатацию при ручном хранении")
+	assert(MultiFieldManager.total_aux_cycles == 1, "Lifetime-счётчик автономных циклов должен увеличиться")
+
+	MultiFieldManager.fields["field_2"]["level"] = 3
+	assert(is_equal_approx(MultiFieldManager.get_cycle_seconds("field_2"), 720.0), "Участок 3 уровня должен иметь 12-минутный цикл")
+	assert(MultiFieldManager.get_yield_multiplier("field_2") > 1.0, "Улучшенный участок должен повышать урожайность")
+	MultiFieldManager.fields["field_2"]["crop_id"] = "sunflower"
+	MultiFieldManager.save_to_settings()
+	MultiFieldManager.fields = {}
+	MultiFieldManager.init_from_settings()
+	assert(MultiFieldManager.is_unlocked("field_2"), "Открытый участок должен восстановиться")
+	assert(int(MultiFieldManager.get_field("field_2").get("level", 0)) == 3, "Уровень участка должен сохраниться")
+	assert(str(MultiFieldManager.get_field("field_2").get("crop_id", "")) == "sunflower", "Культура участка должна сохраниться")
+	assert(int(MultiFieldManager.get_field("field_2").get("monitor_index", -1)) == 0, "Монитор участка должен сохраниться")
+	print("  ✔ ТЕСТ 20 УСПЕШНО ПРОЙДЕН!")
+
+	MultiFieldManager.fields = old_fields_state
+	MultiFieldManager.last_update_at = old_fields_last_update
+	MultiFieldManager.total_aux_cycles = old_fields_cycles
+	MultiFieldManager.total_aux_harvest_kg = old_fields_harvest
+	MultiFieldManager.initialized = true
+	MultiFieldManager.save_to_settings()
+	GameManager.coins = old_fields_coins
+	GameManager.total_coins_earned = old_fields_total_earned
+	GameManager.total_harvested = old_fields_harvest_count
+	InventoryManager.stock = old_fields_inventory_stock
+	InventoryManager.quality_stock = old_fields_quality_stock
+	InventoryManager.auto_sell_on_harvest = old_fields_auto_sell
+	QualityManager.total_by_grade = old_fields_quality_totals
+	QualityManager.last_quality_by_crop = old_fields_quality_last
+	QualityManager.best_grade_by_crop = old_fields_quality_best
+	ProgressionManager.farm_level = old_fields_level
+	ProgressionManager.xp = old_fields_xp
+	ProgressionManager.reputation = old_fields_rep
+	ProgressionManager.lifetime_xp = old_fields_lifetime_xp
+	ContractManager.offers = old_contract_offers
+	ContractManager.active_contracts = old_contract_active
+	ContractManager.total_completed = old_contract_completed
+	ContractManager.total_contract_coins = old_contract_coins
+	InventoryManager.save_to_settings()
+	QualityManager.save_to_settings()
+	ProgressionManager.save_to_settings()
+	ContractManager.save_to_settings()
 	GameManager.save_to_settings()
 
 	print("\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ! СИСТЕМА ПОЛНОСТЬЮ ИСПРАВНА!")
