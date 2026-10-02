@@ -22,7 +22,9 @@ const FEATURE_LEVELS: Dictionary = {
 	"heavy_tractor": 8,
 	"greenhouse": 9,
 	"road_train": 10,
-	"super_harvester": 12
+	"chicken_coop": 11,
+	"super_harvester": 12,
+	"cow_barn": 14
 }
 
 const HARVEST_XP: Dictionary = {
@@ -169,7 +171,9 @@ static func get_next_unlock_text() -> String:
 		{"level": 8, "text": "Кировец К-7М"},
 		{"level": 9, "text": "Теплицы"},
 		{"level": 10, "text": "Морковь и КАМАЗ-автопоезд"},
-		{"level": 12, "text": "CLAAS Lexion 8900"}
+		{"level": 11, "text": "Курятник"},
+		{"level": 12, "text": "CLAAS Lexion 8900"},
+		{"level": 14, "text": "Коровник"}
 	]
 	for item in candidates:
 		var level: int = int(item["level"])
