@@ -9,6 +9,7 @@ const GameManager = preload("res://scripts/GameManager.gd")
 const ContractManager = preload("res://scripts/ContractManager.gd")
 const InventoryManager = preload("res://scripts/InventoryManager.gd")
 const MarketManager = preload("res://scripts/MarketManager.gd")
+const QualityManager = preload("res://scripts/QualityManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 const FarmHQ = preload("res://scripts/FarmHQ.gd")
@@ -185,11 +186,12 @@ func _process_market_auto_sales() -> bool:
 		if not MarketManager.should_auto_sell(crop_id, current_price):
 			continue
 
-		var sold_kg: float = InventoryManager.remove_crop(crop_id, amount)
+		var sold_breakdown: Dictionary = InventoryManager.remove_crop_with_quality(crop_id, amount)
+		var sold_kg: float = float(sold_breakdown.get("total_kg", 0.0))
 		if sold_kg <= 0.0:
 			continue
 
-		var gross: int = GameManager.calculate_crop_sale_value(crop_id, sold_kg)
+		var gross: int = GameManager.calculate_quality_breakdown_sale_value(crop_id, sold_breakdown)
 		var sale: Dictionary = GameManager.process_sale_finances(gross)
 		MarketManager.register_auto_sale(crop_id, sold_kg, gross)
 		sold_any = true
@@ -221,6 +223,7 @@ func _on_bankruptcy_requested() -> void:
 	ContractManager.reset_all_contracts()
 	InventoryManager.reset_all()
 	MarketManager.reset_all()
+	QualityManager.reset_all()
 	farm_hq._refresh_contracts_ui()
 	farm_hq._refresh_storage_ui()
 	farm_hq._refresh_market_ui()
@@ -248,6 +251,7 @@ func save_all_state() -> void:
 	ContractManager.save_to_settings()
 	InventoryManager.save_to_settings()
 	MarketManager.save_to_settings()
+	QualityManager.save_to_settings()
 	if field != null:
 		field.save_field_state()
 	if event_manager != null:
