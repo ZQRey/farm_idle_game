@@ -84,7 +84,7 @@ static func get_available_points() -> int:
 	return max(0, get_total_points() - get_spent_points())
 
 static func can_choose_path(path_id: String) -> bool:
-	return initialized 		and PATHS.has(path_id) 		and selected_path == PATH_NONE 		and get_available_points() > 0
+	return initialized and PATHS.has(path_id) and selected_path == PATH_NONE and get_available_points() > 0
 
 static func choose_path(path_id: String) -> bool:
 	if not can_choose_path(path_id):
@@ -95,7 +95,7 @@ static func choose_path(path_id: String) -> bool:
 	return true
 
 static func can_unlock_next_tier() -> bool:
-	return initialized 		and selected_path != PATH_NONE 		and unlocked_tier < MAX_TIER 		and get_available_points() > 0
+	return initialized and selected_path != PATH_NONE and unlocked_tier < MAX_TIER and get_available_points() > 0
 
 static func unlock_next_tier() -> bool:
 	if not can_unlock_next_tier():
