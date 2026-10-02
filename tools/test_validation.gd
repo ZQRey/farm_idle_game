@@ -1216,5 +1216,35 @@ func _init() -> void:
 	SettingsManager.config = real_config
 	print("  ✔ ТЕСТ 23 УСПЕШНО ПРОЙДЕН!")
 
+	# 24. Тест: production timing balance
+	print("\n[ТЕСТ 24] Проверка idle-таймингов:")
+	var wheat_growth: float = float(GameManager.CROPS["wheat"]["growth_time"])
+	var corn_growth: float = float(GameManager.CROPS["corn"]["growth_time"])
+	var sunflower_growth: float = float(GameManager.CROPS["sunflower"]["growth_time"])
+	var carrot_growth: float = float(GameManager.CROPS["carrot"]["growth_time"])
+
+	assert(wheat_growth >= 14.0 * 60.0, "Пшеница не должна созревать за секунды")
+	assert(wheat_growth < corn_growth and corn_growth < sunflower_growth and sunflower_growth < carrot_growth, "Рост культур должен последовательно удлиняться")
+	assert(carrot_growth <= 17.5 * 60.0, "Самая долгая культура должна укладываться в целевой idle-диапазон")
+
+	# На 1920px базовые механические фазы занимают примерно 94 сек.
+	var estimated_mechanical_seconds: float = 94.0
+	var wheat_cycle: float = wheat_growth + estimated_mechanical_seconds
+	var carrot_cycle: float = carrot_growth + estimated_mechanical_seconds
+	assert(wheat_cycle >= 15.0 * 60.0 and wheat_cycle <= 17.0 * 60.0, "Полный цикл пшеницы должен быть около 15–17 минут")
+	assert(carrot_cycle >= 18.0 * 60.0 and carrot_cycle <= 20.0 * 60.0, "Полный цикл моркови должен быть около 18–20 минут")
+	assert(abs(OfflineProgressManager.NOMINAL_CYCLE_SECONDS - 18.0 * 60.0) < 0.1, "Offline nominal cycle должен оставаться 18 минут")
+
+	var gh_times: Array[float] = [
+		float(GameManager.GREENHOUSE_CROPS["bananas"]["growth_time"]),
+		float(GameManager.GREENHOUSE_CROPS["oranges"]["growth_time"]),
+		float(GameManager.GREENHOUSE_CROPS["walnuts"]["growth_time"]),
+		float(GameManager.GREENHOUSE_CROPS["mango"]["growth_time"])
+	]
+	assert(gh_times[0] >= 8.0 * 60.0, "Теплицы не должны выдавать урожай каждые секунды")
+	assert(gh_times[0] < gh_times[1] and gh_times[1] < gh_times[2] and gh_times[2] < gh_times[3], "Тепличные культуры должны иметь возрастающие времена созревания")
+	assert(gh_times[3] <= 14.0 * 60.0, "Максимальный greenhouse cycle должен оставаться в разумном idle-диапазоне")
+	print("  ✔ ТЕСТ 24 УСПЕШНО ПРОЙДЕН!")
+
 	print("\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ! СИСТЕМА ПОЛНОСТЬЮ ИСПРАВНА!")
 	quit(0)
