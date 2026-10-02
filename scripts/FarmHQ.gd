@@ -1235,10 +1235,11 @@ func _update_ui() -> void:
 			btn_stat_call_repair.disabled = true
 			lbl_repair_status.text = "Статус: 🚑 Аварийная служба в пути..."
 		elif is_trouble:
-			btn_emergency_repair.text = "🔧 Вызвать ремонт (30 🪙)"
-			btn_emergency_repair.disabled = (GameManager.coins < 30)
-			btn_stat_call_repair.text = "🔧 Вызвать ремонтную бригаду (30 🪙)"
-			btn_stat_call_repair.disabled = (GameManager.coins < 30)
+			var emergency_cost: int = GameManager.get_emergency_repair_cost()
+			btn_emergency_repair.text = "🔧 Вызвать ремонт (%d 🪙)" % emergency_cost
+			btn_emergency_repair.disabled = (GameManager.coins < emergency_cost)
+			btn_stat_call_repair.text = "🔧 Вызвать ремонтную бригаду (%d 🪙)" % emergency_cost
+			btn_stat_call_repair.disabled = (GameManager.coins < emergency_cost)
 			if GameManager.is_broken_down:
 				lbl_repair_status.text = "Статус: ⚙ ТЕХНИКА СЛОМАЛАСЬ! ВАЛИТ ДЫМ!"
 			elif GameManager.is_stuck_in_mud:
