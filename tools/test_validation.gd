@@ -376,6 +376,43 @@ func _init() -> void:
 	assert(VehicleManager.get_active_mileage(VehicleManager.ROLE_TRACTOR) >= 4.0, "Пробег должен сохраняться")
 	print("  ✔ ТЕСТ 10 УСПЕШНО ПРОЙДЕН!")
 
+	# 11. Тест: тюнинг конкретного экземпляра техники
+	print("\n[ТЕСТ 11] Проверка тюнинга техники:")
+	var active_tractor: Dictionary = VehicleManager.get_active_vehicle(VehicleManager.ROLE_TRACTOR)
+	var active_tractor_id: String = str(active_tractor.get("id", ""))
+	assert(active_tractor_id != "", "Активный трактор должен иметь ID")
+
+	var base_speed: float = VehicleManager.get_speed_multiplier(VehicleManager.ROLE_TRACTOR)
+	var base_fuel: float = VehicleManager.get_fuel_multiplier(VehicleManager.ROLE_TRACTOR)
+	var base_reliability: float = VehicleManager.get_active_reliability(VehicleManager.ROLE_TRACTOR)
+
+	var first_engine_cost: int = VehicleManager.get_upgrade_cost(active_tractor_id, "engine")
+	assert(first_engine_cost > 0, "Первый уровень двигателя должен иметь стоимость")
+	assert(VehicleManager.apply_upgrade(active_tractor_id, "engine"), "Улучшение двигателя должно применяться")
+	assert(VehicleManager.get_upgrade_level(active_tractor_id, "engine") == 1, "Двигатель должен стать уровня 1")
+	assert(VehicleManager.get_speed_multiplier(VehicleManager.ROLE_TRACTOR) > base_speed, "Двигатель должен увеличить скорость")
+
+	assert(VehicleManager.apply_upgrade(active_tractor_id, "fuel_system"), "Топливная система должна улучшаться")
+	assert(VehicleManager.apply_upgrade(active_tractor_id, "transmission"), "Трансмиссия должна улучшаться")
+	assert(VehicleManager.get_fuel_multiplier(VehicleManager.ROLE_TRACTOR) < base_fuel, "Тюнинг топлива/трансмиссии должен снизить расход")
+
+	assert(VehicleManager.apply_upgrade(active_tractor_id, "electronics"), "GPS и свет должны улучшаться")
+	assert(VehicleManager.get_active_reliability(VehicleManager.ROLE_TRACTOR) > base_reliability, "Электроника должна повысить надёжность")
+
+	var second_engine_cost: int = VehicleManager.get_upgrade_cost(active_tractor_id, "engine")
+	assert(second_engine_cost > first_engine_cost, "Следующий уровень двигателя должен быть дороже")
+
+	VehicleManager.save_to_settings()
+	VehicleManager.vehicles = {}
+	VehicleManager.active_by_role = {}
+	VehicleManager.init_from_settings()
+	var restored_tractor: Dictionary = VehicleManager.get_active_vehicle(VehicleManager.ROLE_TRACTOR)
+	var restored_tractor_id: String = str(restored_tractor.get("id", ""))
+	assert(VehicleManager.get_upgrade_level(restored_tractor_id, "engine") == 1, "Уровень двигателя должен сохраниться")
+	assert(VehicleManager.get_upgrade_level(restored_tractor_id, "fuel_system") == 1, "Уровень топливной системы должен сохраниться")
+	assert(VehicleManager.get_upgrade_level(restored_tractor_id, "electronics") == 1, "Уровень электроники должен сохраниться")
+	print("  ✔ ТЕСТ 11 УСПЕШНО ПРОЙДЕН!")
+
 	# Возвращаем автопарк пользователя.
 	VehicleManager.vehicles = old_vehicles
 	VehicleManager.active_by_role = old_active_fleet

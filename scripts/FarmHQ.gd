@@ -797,19 +797,31 @@ func _refresh_fleet_ui() -> void:
 			var active_model: String = VehicleManager.get_active_model_id(role)
 			var is_active: bool = model_id == active_model
 
+			var vehicle_stats: Dictionary = VehicleManager.get_vehicle_effective_stats(vehicle_id)
+
+			var info_box: VBoxContainer = VBoxContainer.new()
+			info_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			info_box.add_theme_constant_override("separation", 4)
+			row.add_child(info_box)
+
 			var info: Label = Label.new()
-			info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			info.text = "%s%s | класс: %s | состояние %.0f%% | пробег %.1f км | скорость x%.2f | расход x%.2f | надёжность %.0f%%" % [
+			info.text = "%s%s | класс: %s | состояние %.0f%% | пробег %.1f км" % [
 				"✅ " if is_active else "",
 				str(vehicle.get("name", model_id)),
 				str(vehicle.get("class", "standard")),
 				float(vehicle.get("condition", 100.0)),
-				float(vehicle.get("mileage_km", 0.0)),
-				float(vehicle.get("speed_mult", 1.0)),
-				float(vehicle.get("fuel_mult", 1.0)),
-				float(vehicle.get("reliability", 0.85)) * 100.0
+				float(vehicle.get("mileage_km", 0.0))
 			]
-			row.add_child(info)
+			info_box.add_child(info)
+
+			var stats_label: Label = Label.new()
+			stats_label.text = "Эффективно: скорость x%.2f | расход x%.2f | производительность x%.2f | надёжность %.0f%%" % [
+				float(vehicle_stats.get("speed_mult", 1.0)),
+				float(vehicle_stats.get("fuel_mult", 1.0)),
+				float(vehicle_stats.get("capacity_mult", 1.0)),
+				float(vehicle_stats.get("reliability", 0.85)) * 100.0
+			]
+			info_box.add_child(stats_label)
 
 			var select_btn: Button = Button.new()
 			select_btn.text = "Активна" if is_active else "Выбрать"
@@ -824,6 +836,49 @@ func _refresh_fleet_ui() -> void:
 					_update_ui()
 			)
 			row.add_child(select_btn)
+
+			var upgrades_box: VBoxContainer = VBoxContainer.new()
+			upgrades_box.add_theme_constant_override("separation", 3)
+			info_box.add_child(upgrades_box)
+
+			for upgrade_id in VehicleManager.UPGRADE_ORDER:
+				var upgrade_info: Dictionary = VehicleManager.UPGRADE_CATALOG[upgrade_id]
+				var upgrade_row: HBoxContainer = HBoxContainer.new()
+				upgrade_row.add_theme_constant_override("separation", 6)
+				upgrades_box.add_child(upgrade_row)
+
+				var upgrade_level: int = VehicleManager.get_upgrade_level(vehicle_id, upgrade_id)
+				var upgrade_label: Label = Label.new()
+				upgrade_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				upgrade_label.text = "%s %s — ур. %d/%d | %s" % [
+					str(upgrade_info.get("icon", "🔧")),
+					str(upgrade_info.get("name", upgrade_id)),
+					upgrade_level,
+					VehicleManager.MAX_UPGRADE_LEVEL,
+					str(upgrade_info.get("description", ""))
+				]
+				upgrade_row.add_child(upgrade_label)
+
+				var upgrade_btn: Button = Button.new()
+				var upgrade_cost: int = VehicleManager.get_upgrade_cost(vehicle_id, upgrade_id)
+				if upgrade_level >= VehicleManager.MAX_UPGRADE_LEVEL:
+					upgrade_btn.text = "MAX ✔"
+					upgrade_btn.disabled = true
+				else:
+					upgrade_btn.text = "Улучшить (%d 🪙)" % upgrade_cost
+					upgrade_btn.disabled = GameManager.coins < upgrade_cost
+					var u_vehicle_id: String = vehicle_id
+					var u_upgrade_id: String = upgrade_id
+					upgrade_btn.pressed.connect(func(target_vehicle_id: String = u_vehicle_id, target_upgrade_id: String = u_upgrade_id):
+						var current_cost: int = VehicleManager.get_upgrade_cost(target_vehicle_id, target_upgrade_id)
+						if current_cost > 0 and GameManager.spend_coins(current_cost):
+							if VehicleManager.apply_upgrade(target_vehicle_id, target_upgrade_id):
+								GameManager._sync_legacy_vehicle_state()
+								GameManager.save_to_settings()
+								_update_ui()
+					)
+				upgrade_row.add_child(upgrade_btn)
+
 			fleet_container.add_child(panel)
 
 		var role_sep: HSeparator = HSeparator.new()

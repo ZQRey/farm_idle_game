@@ -9,6 +9,41 @@ const ROLE_HARVESTER: String = "harvester"
 const ROLE_TRUCK: String = "truck"
 const ROLES: Array[String] = [ROLE_TRACTOR, ROLE_TANKER, ROLE_HARVESTER, ROLE_TRUCK]
 
+const MAX_UPGRADE_LEVEL: int = 5
+const UPGRADE_ORDER: Array[String] = ["engine", "fuel_system", "tires", "transmission", "electronics"]
+const UPGRADE_CATALOG: Dictionary = {
+	"engine": {
+		"name": "Двигатель",
+		"icon": "⚙",
+		"base_cost": 120,
+		"description": "+4% скорость и +2% производительность за уровень"
+	},
+	"fuel_system": {
+		"name": "Топливная система и бак",
+		"icon": "⛽",
+		"base_cost": 90,
+		"description": "-4% расход топлива за уровень"
+	},
+	"tires": {
+		"name": "Шины",
+		"icon": "🛞",
+		"base_cost": 80,
+		"description": "+1% скорость и +1.5% надёжность за уровень"
+	},
+	"transmission": {
+		"name": "Трансмиссия",
+		"icon": "🔩",
+		"base_cost": 110,
+		"description": "+3% скорость и -2% расход за уровень"
+	},
+	"electronics": {
+		"name": "GPS и свет",
+		"icon": "📡",
+		"base_cost": 100,
+		"description": "+2% надёжность за уровень"
+	}
+}
+
 const CATALOG: Dictionary = {
 	"tractor_basic": {
 		"name": "МТЗ-82",
@@ -111,6 +146,7 @@ static func init_from_settings(legacy_flags: Dictionary = {}, legacy_conditions:
 			_add_vehicle_internal("truck_road_train", float(legacy_conditions.get("truck", 100.0)), true)
 
 	initialized = true
+	_normalize_vehicle_upgrade_schema()
 	_repair_invalid_active_refs()
 	save_to_settings()
 
@@ -176,15 +212,33 @@ static func get_owned_for_role(role: String) -> Array[Dictionary]:
 
 static func get_speed_multiplier(role: String) -> float:
 	var v: Dictionary = get_active_vehicle(role)
-	return max(0.1, float(v.get("speed_mult", 1.0)))
+	if v.is_empty():
+		return 1.0
+	var upgrades: Dictionary = _get_vehicle_upgrades(v)
+	var engine: int = int(upgrades.get("engine", 0))
+	var tires: int = int(upgrades.get("tires", 0))
+	var transmission: int = int(upgrades.get("transmission", 0))
+	var tuning_mult: float = 1.0 + engine * 0.04 + tires * 0.01 + transmission * 0.03
+	return max(0.1, float(v.get("speed_mult", 1.0)) * tuning_mult)
 
 static func get_fuel_multiplier(role: String) -> float:
 	var v: Dictionary = get_active_vehicle(role)
-	return max(0.1, float(v.get("fuel_mult", 1.0)))
+	if v.is_empty():
+		return 1.0
+	var upgrades: Dictionary = _get_vehicle_upgrades(v)
+	var fuel_system: int = int(upgrades.get("fuel_system", 0))
+	var transmission: int = int(upgrades.get("transmission", 0))
+	var efficiency: float = 1.0 - fuel_system * 0.04 - transmission * 0.02
+	return max(0.55, float(v.get("fuel_mult", 1.0)) * efficiency)
 
 static func get_capacity_multiplier(role: String) -> float:
 	var v: Dictionary = get_active_vehicle(role)
-	return max(0.1, float(v.get("capacity_mult", 1.0)))
+	if v.is_empty():
+		return 1.0
+	var upgrades: Dictionary = _get_vehicle_upgrades(v)
+	var engine: int = int(upgrades.get("engine", 0))
+	var power_bonus: float = 1.0 + engine * 0.02
+	return max(0.1, float(v.get("capacity_mult", 1.0)) * power_bonus)
 
 static func get_active_condition(role: String) -> float:
 	var v: Dictionary = get_active_vehicle(role)
@@ -192,11 +246,85 @@ static func get_active_condition(role: String) -> float:
 
 static func get_active_reliability(role: String) -> float:
 	var v: Dictionary = get_active_vehicle(role)
-	return clampf(float(v.get("reliability", 0.85)), 0.05, 1.0)
+	if v.is_empty():
+		return 0.85
+	var upgrades: Dictionary = _get_vehicle_upgrades(v)
+	var tires: int = int(upgrades.get("tires", 0))
+	var electronics: int = int(upgrades.get("electronics", 0))
+	var bonus: float = tires * 0.015 + electronics * 0.02
+	return clampf(float(v.get("reliability", 0.85)) + bonus, 0.05, 0.99)
 
 static func get_active_mileage(role: String) -> float:
 	var v: Dictionary = get_active_vehicle(role)
 	return max(0.0, float(v.get("mileage_km", 0.0)))
+
+static func get_vehicle(vehicle_id: String) -> Dictionary:
+	if vehicles.has(vehicle_id):
+		return vehicles[vehicle_id].duplicate(true)
+	return {}
+
+static func get_upgrade_level(vehicle_id: String, upgrade_id: String) -> int:
+	if not vehicles.has(vehicle_id) or not UPGRADE_CATALOG.has(upgrade_id):
+		return 0
+	var v: Dictionary = vehicles[vehicle_id]
+	var upgrades: Dictionary = _get_vehicle_upgrades(v)
+	return clampi(int(upgrades.get(upgrade_id, 0)), 0, MAX_UPGRADE_LEVEL)
+
+static func can_upgrade_vehicle(vehicle_id: String, upgrade_id: String) -> bool:
+	return vehicles.has(vehicle_id) and UPGRADE_CATALOG.has(upgrade_id) and get_upgrade_level(vehicle_id, upgrade_id) < MAX_UPGRADE_LEVEL
+
+static func get_upgrade_cost(vehicle_id: String, upgrade_id: String) -> int:
+	if not can_upgrade_vehicle(vehicle_id, upgrade_id):
+		return 0
+	var v: Dictionary = vehicles[vehicle_id]
+	var info: Dictionary = UPGRADE_CATALOG[upgrade_id]
+	var current_level: int = get_upgrade_level(vehicle_id, upgrade_id)
+	var class_mult: float = 1.0
+	match str(v.get("class", "standard")):
+		"heavy":
+			class_mult = 1.25
+		"premium":
+			class_mult = 1.45
+	var level_mult: float = pow(1.65, current_level)
+	return max(1, int(round(float(info.get("base_cost", 100)) * class_mult * level_mult)))
+
+static func apply_upgrade(vehicle_id: String, upgrade_id: String) -> bool:
+	if not can_upgrade_vehicle(vehicle_id, upgrade_id):
+		return false
+	var v: Dictionary = vehicles[vehicle_id]
+	var upgrades: Dictionary = _get_vehicle_upgrades(v)
+	upgrades[upgrade_id] = get_upgrade_level(vehicle_id, upgrade_id) + 1
+	v["upgrades"] = upgrades
+	vehicles[vehicle_id] = v
+	save_to_settings()
+	return true
+
+static func get_vehicle_effective_stats(vehicle_id: String) -> Dictionary:
+	if not vehicles.has(vehicle_id):
+		return {}
+	var v: Dictionary = vehicles[vehicle_id]
+	var role: String = str(v.get("role", ""))
+	var active_id: String = str(active_by_role.get(role, ""))
+	if active_id == vehicle_id:
+		return {
+			"speed_mult": get_speed_multiplier(role),
+			"fuel_mult": get_fuel_multiplier(role),
+			"capacity_mult": get_capacity_multiplier(role),
+			"reliability": get_active_reliability(role)
+		}
+
+	var upgrades: Dictionary = _get_vehicle_upgrades(v)
+	var engine: int = int(upgrades.get("engine", 0))
+	var fuel_system: int = int(upgrades.get("fuel_system", 0))
+	var tires: int = int(upgrades.get("tires", 0))
+	var transmission: int = int(upgrades.get("transmission", 0))
+	var electronics: int = int(upgrades.get("electronics", 0))
+	return {
+		"speed_mult": float(v.get("speed_mult", 1.0)) * (1.0 + engine * 0.04 + tires * 0.01 + transmission * 0.03),
+		"fuel_mult": max(0.55, float(v.get("fuel_mult", 1.0)) * (1.0 - fuel_system * 0.04 - transmission * 0.02)),
+		"capacity_mult": float(v.get("capacity_mult", 1.0)) * (1.0 + engine * 0.02),
+		"reliability": clampf(float(v.get("reliability", 0.85)) + tires * 0.015 + electronics * 0.02, 0.05, 0.99)
+	}
 
 static func add_cycle_usage(role: String, mileage_km: float, condition_loss: float) -> void:
 	var vehicle_id: String = str(active_by_role.get(role, ""))
@@ -204,7 +332,7 @@ static func add_cycle_usage(role: String, mileage_km: float, condition_loss: flo
 		return
 	var v: Dictionary = vehicles[vehicle_id]
 	v["mileage_km"] = max(0.0, float(v.get("mileage_km", 0.0)) + max(0.0, mileage_km))
-	var reliability: float = clampf(float(v.get("reliability", 0.85)), 0.05, 1.0)
+	var reliability: float = get_active_reliability(role)
 	var adjusted_loss: float = max(0.0, condition_loss) * (1.15 - reliability * 0.30)
 	v["condition"] = max(5.0, float(v.get("condition", 100.0)) - adjusted_loss)
 	vehicles[vehicle_id] = v
@@ -261,11 +389,35 @@ static func _add_vehicle_internal(model_id: String, condition: float, make_activ
 		"reliability": float(data.get("reliability", 0.85)),
 		"capacity_mult": float(data.get("capacity_mult", 1.0)),
 		"condition": clampf(condition, 5.0, 100.0),
-		"mileage_km": 0.0
+		"mileage_km": 0.0,
+		"upgrades": _default_upgrades()
 	}
 	if make_active or not active_by_role.has(role):
 		active_by_role[role] = vehicle_id
 	return vehicle_id
+
+static func _default_upgrades() -> Dictionary:
+	return {
+		"engine": 0,
+		"fuel_system": 0,
+		"tires": 0,
+		"transmission": 0,
+		"electronics": 0
+	}
+
+static func _get_vehicle_upgrades(vehicle: Dictionary) -> Dictionary:
+	var value: Variant = vehicle.get("upgrades", {})
+	var result: Dictionary = _default_upgrades()
+	if typeof(value) == TYPE_DICTIONARY:
+		for upgrade_id in UPGRADE_ORDER:
+			result[upgrade_id] = clampi(int(value.get(upgrade_id, 0)), 0, MAX_UPGRADE_LEVEL)
+	return result
+
+static func _normalize_vehicle_upgrade_schema() -> void:
+	for vehicle_id in vehicles:
+		var v: Dictionary = vehicles[vehicle_id]
+		v["upgrades"] = _get_vehicle_upgrades(v)
+		vehicles[vehicle_id] = v
 
 static func _repair_invalid_active_refs() -> void:
 	for role in ROLES:
