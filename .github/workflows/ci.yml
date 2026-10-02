@@ -87,3 +87,43 @@ jobs:
           name: FarmIdleCompanion-Windows-x86_64
           path: build/windows/
           if-no-files-found: error
+
+
+  windows-smoke:
+    name: Windows executable smoke test
+    runs-on: windows-latest
+    needs: windows-build
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: FarmIdleCompanion-Windows-x86_64
+          path: app
+
+      - name: Launch exported executable headless
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $exe = Join-Path $PWD "app/FarmIdleCompanion.exe"
+          if (-not (Test-Path $exe)) {
+            throw "FarmIdleCompanion.exe not found"
+          }
+
+          $log = Join-Path $PWD "windows-smoke.log"
+          & $exe --headless --quit-after 5 2>&1 | Tee-Object -FilePath $log
+          if ($LASTEXITCODE -ne 0) {
+            throw "Windows executable exited with code $LASTEXITCODE"
+          }
+
+          $content = Get-Content $log -Raw
+          if ($content -match "SCRIPT ERROR:|Parse Error:|Compile Error:|Failed to load script") {
+            throw "Godot runtime error detected in Windows smoke log"
+          }
+
+      - name: Upload smoke log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FarmIdleCompanion-Windows-smoke-log
+          path: windows-smoke.log
+          if-no-files-found: ignore
