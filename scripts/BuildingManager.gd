@@ -67,7 +67,7 @@ static func init_from_settings() -> void:
 	save_to_settings()
 
 static func write_to_config() -> void:
-	SettingsManager.config.set_value("buildings_v2", "levels", levels)
+	SettingsManager.config.set_value("buildings_v2", "levels", levels.duplicate(true))
 	SettingsManager.config.set_value("buildings_v2", "total_invested", total_invested)
 
 static func save_to_settings() -> void:
