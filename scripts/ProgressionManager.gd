@@ -29,6 +29,7 @@ const FEATURE_LEVELS: Dictionary = {
 	"oil_press": 16,
 	"dairy_processing": 17,
 	"field_2": 18,
+	"specialization": 20,
 	"field_3": 22
 }
 
@@ -183,7 +184,10 @@ static func get_next_unlock_text() -> String:
 		{"level": 16, "text": "Маслопресс"},
 		{"level": 17, "text": "Молочный цех"},
 		{"level": 18, "text": "Северный участок"},
-		{"level": 22, "text": "Дальний участок"}
+		{"level": 20, "text": "Специализация фермы"},
+		{"level": 22, "text": "Дальний участок"},
+		{"level": 25, "text": "2-е очко специализации"},
+		{"level": 30, "text": "3-е очко специализации"}
 	]
 	for item in candidates:
 		var level: int = int(item["level"])
