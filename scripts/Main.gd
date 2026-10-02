@@ -16,6 +16,7 @@ const OfflineProgressManager = preload("res://scripts/OfflineProgressManager.gd"
 const LivestockManager = preload("res://scripts/LivestockManager.gd")
 const ProcessingManager = preload("res://scripts/ProcessingManager.gd")
 const MultiFieldManager = preload("res://scripts/MultiFieldManager.gd")
+const SpecializationManager = preload("res://scripts/SpecializationManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 const FarmHQ = preload("res://scripts/FarmHQ.gd")
@@ -39,6 +40,7 @@ func _ready() -> void:
 	if GameManager.has_barn:
 		InventoryManager.ensure_minimum_level(2)
 	MarketManager.init_from_settings()
+	SpecializationManager.init_from_settings()
 	LivestockManager.init_from_settings()
 	ProcessingManager.init_from_settings()
 	MultiFieldManager.init_from_settings()
@@ -369,6 +371,7 @@ func save_all_state() -> void:
 	LivestockManager.save_to_settings()
 	ProcessingManager.save_to_settings()
 	MultiFieldManager.save_to_settings()
+	SpecializationManager.save_to_settings()
 	if field != null:
 		field.save_field_state()
 	if event_manager != null:
