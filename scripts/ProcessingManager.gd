@@ -52,8 +52,8 @@ const FACILITIES: Dictionary = {
 const PRODUCT_ORDER: Array[String] = ["flour", "oil", "cheese"]
 const PRODUCTS: Dictionary = {
 	"flour": {"name": "Мука", "icon": "🌾", "unit": "кг", "price": 1},
-	"oil": {"name": "Подсолнечное масло", "icon": "🫗", "unit": "л", "price": 8},
-	"cheese": {"name": "Сыр", "icon": "🧀", "unit": "кг", "price": 28}
+	"oil": {"name": "Подсолнечное масло", "icon": "🫗", "unit": "л", "price": 6},
+	"cheese": {"name": "Сыр", "icon": "🧀", "unit": "кг", "price": 24}
 }
 
 static var facility_levels: Dictionary = {}
@@ -95,9 +95,9 @@ static func init_from_settings() -> void:
 	save_to_settings()
 
 static func write_to_config() -> void:
-	SettingsManager.config.set_value("processing", "facility_levels", facility_levels)
-	SettingsManager.config.set_value("processing", "products", products)
-	SettingsManager.config.set_value("processing", "lifetime_output", lifetime_output)
+	SettingsManager.config.set_value("processing", "facility_levels", facility_levels.duplicate(true))
+	SettingsManager.config.set_value("processing", "products", products.duplicate(true))
+	SettingsManager.config.set_value("processing", "lifetime_output", lifetime_output.duplicate(true))
 	SettingsManager.config.set_value("processing", "auto_sell_products", auto_sell_products)
 	SettingsManager.config.set_value("processing", "total_batches", total_batches)
 	SettingsManager.config.set_value("processing", "total_product_coins", total_product_coins)

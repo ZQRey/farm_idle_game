@@ -128,7 +128,7 @@ func _create_crisis_visuals() -> void:
 	)
 
 	police_btn_bribe = Button.new()
-	police_btn_bribe.text = "🤝 Взятка (10%)"
+	police_btn_bribe.text = "🧾 Экспресс-проверка (10%)"
 	police_btn_bribe.add_theme_color_override("font_color", Color("fbf236"))
 	police_btn_bribe.custom_minimum_size = Vector2(120, 26)
 	police_btn_bribe.visible = false
@@ -490,7 +490,7 @@ func _process_repair_service(delta: float) -> void:
 			breakdown_resolved.emit()
 
 # ------------------------------------------------------------------------------
-# 3. СОБЫТИЕ ПОЛИЦИЯ (ПРОВЕРКА ТЕХНИКИ, ШТРАФ ИЛИ ВЗЯТКА 10%)
+# 3. СОБЫТИЕ ИНСПЕКЦИИ (ШТРАФ ИЛИ ПЛАТНАЯ ЭКСПРЕСС-ПРОВЕРКА)
 # ------------------------------------------------------------------------------
 func trigger_police() -> void:
 	if is_police_active or field_fsm == null:
@@ -515,11 +515,11 @@ func trigger_police() -> void:
 		police_btn_fine.visible = true
 		police_btn_fine.position = Vector2(target_x - 30.0, FieldFSM.GROUND_Y - 60.0)
 	if police_btn_bribe != null:
-		police_btn_bribe.text = "🤝 Взятка (%d 🪙)" % bribe_amount
+		police_btn_bribe.text = "🧾 Экспресс-проверка (%d 🪙)" % bribe_amount
 		police_btn_bribe.visible = true
 		police_btn_bribe.position = Vector2(target_x + 95.0, FieldFSM.GROUND_Y - 60.0)
 
-	print("[EventManager] 🚨 ПОЛИЦИЯ ПРИБЫЛА НА ФЕРМУ! Проверка техники: штраф %d 🪙 или взятка %d 🪙" % [fine_cost, bribe_amount])
+	print("[EventManager] 🚨 ИНСПЕКЦИЯ ПРИБЫЛА НА ФЕРМУ! Проверка техники: штраф %d 🪙 или экспресс-проверка %d 🪙" % [fine_cost, bribe_amount])
 	police_arrived.emit()
 
 func _process_police(delta: float) -> void:
@@ -565,7 +565,7 @@ func resolve_police_bribe() -> void:
 	var bribe_amount: int = max(10, int(GameManager.coins * 0.10))
 	GameManager.spend_coins(bribe_amount)
 	_dismiss_police()
-	print("[EventManager] 🤝 Инспектор принял 'пожертвование' 10%% (%d 🪙) и уехал довольным!" % bribe_amount)
+	print("[EventManager] 🧾 Оплачена экспресс-проверка техники: %d 🪙" % bribe_amount)
 	police_resolved.emit()
 
 func _dismiss_police() -> void:

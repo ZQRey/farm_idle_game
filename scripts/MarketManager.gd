@@ -105,10 +105,10 @@ static func init_from_settings() -> void:
 	save_to_settings()
 
 static func write_to_config() -> void:
-	SettingsManager.config.set_value("market", "crop_multipliers", crop_multipliers)
-	SettingsManager.config.set_value("market", "price_history", price_history)
-	SettingsManager.config.set_value("market", "auto_sell_rules", auto_sell_rules)
-	SettingsManager.config.set_value("market", "active_event", active_event)
+	SettingsManager.config.set_value("market", "crop_multipliers", crop_multipliers.duplicate(true))
+	SettingsManager.config.set_value("market", "price_history", price_history.duplicate(true))
+	SettingsManager.config.set_value("market", "auto_sell_rules", auto_sell_rules.duplicate(true))
+	SettingsManager.config.set_value("market", "active_event", active_event.duplicate(true))
 	SettingsManager.config.set_value("market", "total_auto_sold_kg", total_auto_sold_kg)
 	SettingsManager.config.set_value("market", "total_auto_sale_gross", total_auto_sale_gross)
 	SettingsManager.config.set_value("market", "last_tick_at", last_tick_at)

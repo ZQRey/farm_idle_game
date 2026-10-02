@@ -39,9 +39,9 @@ static func init_from_settings() -> void:
 	save_to_settings()
 
 static func write_to_config() -> void:
-	SettingsManager.config.set_value("quality", "total_by_grade", total_by_grade)
-	SettingsManager.config.set_value("quality", "last_quality_by_crop", last_quality_by_crop)
-	SettingsManager.config.set_value("quality", "best_grade_by_crop", best_grade_by_crop)
+	SettingsManager.config.set_value("quality", "total_by_grade", total_by_grade.duplicate(true))
+	SettingsManager.config.set_value("quality", "last_quality_by_crop", last_quality_by_crop.duplicate(true))
+	SettingsManager.config.set_value("quality", "best_grade_by_crop", best_grade_by_crop.duplicate(true))
 
 static func save_to_settings() -> void:
 	if not initialized:

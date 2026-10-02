@@ -966,7 +966,7 @@ func _init() -> void:
 	var old_contract_offers: Array = ContractManager.offers.duplicate(true)
 	var old_contract_active: Array = ContractManager.active_contracts.duplicate(true)
 	var old_contract_completed: int = ContractManager.total_completed
-	var old_contract_coins: int = ContractManager.total_contract_coins
+	var old_fields_contract_coins: int = ContractManager.total_contract_coins
 
 	MultiFieldManager.initialized = true
 	MultiFieldManager.fields = {
@@ -1050,7 +1050,7 @@ func _init() -> void:
 	ContractManager.offers = old_contract_offers
 	ContractManager.active_contracts = old_contract_active
 	ContractManager.total_completed = old_contract_completed
-	ContractManager.total_contract_coins = old_contract_coins
+	ContractManager.total_contract_coins = old_fields_contract_coins
 	InventoryManager.save_to_settings()
 	QualityManager.save_to_settings()
 	ProgressionManager.save_to_settings()
@@ -1183,6 +1183,104 @@ func _init() -> void:
 	SettingsManager.config.set_value("processing", "facility_levels", old_prestige_processing)
 	SettingsManager.save_settings()
 	ProgressionManager.save_to_settings()
+
+	# 23. Тест: schema migration и санитарная проверка save
+	print("\n[ТЕСТ 23] Проверка миграций и валидации save:")
+	var real_config: ConfigFile = SettingsManager.config
+	var temp_config: ConfigFile = ConfigFile.new()
+	SettingsManager.config = temp_config
+	temp_config.set_value("finances", "total_bankruptcies", 7)
+	temp_config.set_value("display", "screen_index", -1)
+	temp_config.set_value("display", "graphics_mode", "broken-mode")
+	temp_config.set_value("display", "fps_limit", 999)
+	temp_config.set_value("game", "coins", -50)
+	temp_config.set_value("game", "current_crop", "invalid_crop")
+	temp_config.set_value("game", "speed_multiplier", 999.0)
+	temp_config.set_value("mechanics", "fuel_level", 250.0)
+
+	SettingsManager._run_migrations()
+	SettingsManager._validate_critical_values()
+
+	assert(SettingsManager.get_schema_version() == SettingsManager.CURRENT_SCHEMA_VERSION, "Save должен мигрировать до текущей schema")
+	assert(int(temp_config.get_value("statistics", "total_bankruptcies", 0)) == 7, "Legacy bankruptcies должны мигрировать в statistics")
+	assert(int(temp_config.get_value("display", "screen_index", 0)) == -1, "Спецрежим всех мониторов -1 должен сохраняться")
+	assert(str(temp_config.get_value("display", "graphics_mode", "")) == "32bit", "Некорректный graphics mode должен нормализоваться")
+	assert(int(temp_config.get_value("display", "fps_limit", 0)) == 240, "FPS должен clamp-иться до 240")
+	assert(int(temp_config.get_value("game", "coins", -1)) == 0, "Монеты не должны быть отрицательными после validation")
+	assert(str(temp_config.get_value("game", "current_crop", "")) == "wheat", "Неизвестная культура должна заменяться на wheat")
+	assert(is_equal_approx(float(temp_config.get_value("game", "speed_multiplier", 0.0)), 10.0), "Speed multiplier должен clamp-иться")
+	assert(is_equal_approx(float(temp_config.get_value("mechanics", "fuel_level", 0.0)), 100.0), "Fuel должен clamp-иться")
+	assert(str(temp_config.get_value("specialization", "selected_path", "")) == "none", "Migration v3 должна добавить specialization defaults")
+	assert(int(temp_config.get_value("prestige", "rank", -1)) == 0, "Migration v3 должна добавить Prestige defaults")
+
+	SettingsManager.config = real_config
+	print("  ✔ ТЕСТ 23 УСПЕШНО ПРОЙДЕН!")
+
+	# 24. Тест: production timing balance
+	print("\n[ТЕСТ 24] Проверка idle-таймингов:")
+	var wheat_growth: float = float(GameManager.CROPS["wheat"]["growth_time"])
+	var corn_growth: float = float(GameManager.CROPS["corn"]["growth_time"])
+	var sunflower_growth: float = float(GameManager.CROPS["sunflower"]["growth_time"])
+	var carrot_growth: float = float(GameManager.CROPS["carrot"]["growth_time"])
+
+	assert(wheat_growth >= 14.0 * 60.0, "Пшеница не должна созревать за секунды")
+	assert(wheat_growth < corn_growth and corn_growth < sunflower_growth and sunflower_growth < carrot_growth, "Рост культур должен последовательно удлиняться")
+	assert(carrot_growth <= 17.5 * 60.0, "Самая долгая культура должна укладываться в целевой idle-диапазон")
+
+	# На 1920px базовые механические фазы занимают примерно 94 сек.
+	var estimated_mechanical_seconds: float = 94.0
+	var wheat_cycle: float = wheat_growth + estimated_mechanical_seconds
+	var carrot_cycle: float = carrot_growth + estimated_mechanical_seconds
+	assert(wheat_cycle >= 15.0 * 60.0 and wheat_cycle <= 17.0 * 60.0, "Полный цикл пшеницы должен быть около 15–17 минут")
+	assert(carrot_cycle >= 18.0 * 60.0 and carrot_cycle <= 20.0 * 60.0, "Полный цикл моркови должен быть около 18–20 минут")
+	assert(abs(OfflineProgressManager.NOMINAL_CYCLE_SECONDS - 18.0 * 60.0) < 0.1, "Offline nominal cycle должен оставаться 18 минут")
+
+	var gh_times: Array[float] = [
+		float(GameManager.GREENHOUSE_CROPS["bananas"]["growth_time"]),
+		float(GameManager.GREENHOUSE_CROPS["oranges"]["growth_time"]),
+		float(GameManager.GREENHOUSE_CROPS["walnuts"]["growth_time"]),
+		float(GameManager.GREENHOUSE_CROPS["mango"]["growth_time"])
+	]
+	assert(gh_times[0] >= 8.0 * 60.0, "Теплицы не должны выдавать урожай каждые секунды")
+	assert(gh_times[0] < gh_times[1] and gh_times[1] < gh_times[2] and gh_times[2] < gh_times[3], "Тепличные культуры должны иметь возрастающие времена созревания")
+	assert(gh_times[3] <= 14.0 * 60.0, "Максимальный greenhouse cycle должен оставаться в разумном idle-диапазоне")
+	print("  ✔ ТЕСТ 24 УСПЕШНО ПРОЙДЕН!")
+
+	# 25. Тест: production economy guardrails
+	print("\n[ТЕСТ 25] Проверка production economy:")
+	assert(int(GameManager.CROPS["wheat"]["base_reward"]) == 55, "Базовая цена пшеницы должна быть 55")
+	assert(int(GameManager.CROPS["corn"]["base_reward"]) == 100, "Базовая цена кукурузы должна быть 100")
+	assert(int(GameManager.CROPS["sunflower"]["base_reward"]) == 175, "Базовая цена подсолнечника должна быть 175")
+	assert(int(GameManager.CROPS["carrot"]["base_reward"]) == 275, "Базовая цена моркови должна быть 275")
+
+	var wheat_margin_before_fuel: int = int(GameManager.CROPS["wheat"]["base_reward"]) - int(GameManager.CROPS["wheat"]["seed_cost"]) - (6 + 5 + 7 + 6)
+	assert(wheat_margin_before_fuel > 0, "Стартовая пшеница должна покрывать семена и зарплаты до топлива")
+	assert(GameManager.MAX_CROP_SALE_MULTIPLIER <= 6.0, "Итоговый crop sale multiplier должен иметь жёсткий late-game cap")
+	assert(FieldFSM.FUEL_BURN_LITERS_PER_SECOND <= 0.12, "Базовый расход топлива не должен съедать всю раннюю маржу")
+
+	var gh_banana_net: int = int(GameManager.GREENHOUSE_CROPS["bananas"]["reward"]) - int(GameManager.GREENHOUSE_CROPS["bananas"]["seed_cost"])
+	var gh_mango_net: int = int(GameManager.GREENHOUSE_CROPS["mango"]["reward"]) - int(GameManager.GREENHOUSE_CROPS["mango"]["seed_cost"])
+	assert(gh_banana_net == 25, "Банановая теплица должна быть вспомогательным доходом, а не money printer")
+	assert(gh_mango_net == 60, "Поздняя теплица должна иметь умеренную маржу")
+
+	var flour_input_value: float = float(GameManager.CROPS["wheat"]["base_reward"])
+	var flour_output_value: float = float(ProcessingManager.FACILITIES["flour_mill"]["output_amount"]) * float(ProcessingManager.PRODUCTS["flour"]["price"])
+	var oil_input_value: float = 0.5 * float(GameManager.CROPS["sunflower"]["base_reward"])
+	var oil_output_value: float = float(ProcessingManager.FACILITIES["oil_press"]["output_amount"]) * float(ProcessingManager.PRODUCTS["oil"]["price"])
+	var milk_input_value: float = 20.0 * float(LivestockManager.MILK_PRICE)
+	var cheese_output_value: float = float(ProcessingManager.FACILITIES["dairy"]["output_amount"]) * float(ProcessingManager.PRODUCTS["cheese"]["price"])
+
+	assert(flour_output_value > flour_input_value and flour_output_value <= flour_input_value * 1.35, "Мука должна давать контролируемую добавленную стоимость")
+	assert(oil_output_value > oil_input_value and oil_output_value <= oil_input_value * 1.35, "Масло должно давать контролируемую добавленную стоимость")
+	assert(cheese_output_value > milk_input_value and cheese_output_value <= milk_input_value * 1.35, "Сыр должен давать контролируемую добавленную стоимость")
+	print("  ✔ ТЕСТ 25 УСПЕШНО ПРОЙДЕН!")
+
+	# 26. Тест: render performance guardrails
+	print("\n[ТЕСТ 26] Проверка render budget:")
+	assert(FieldFSM.CUSTOM_DRAW_FPS >= 8.0, "Custom draw не должен выглядеть дёрганым")
+	assert(FieldFSM.CUSTOM_DRAW_FPS <= 15.0, "Тяжёлый custom draw должен быть ограничен для desktop companion")
+	assert(Engine.max_fps <= 240, "FPS cap не должен выходить за валидированный диапазон")
+	print("  ✔ ТЕСТ 26 УСПЕШНО ПРОЙДЕН!")
 
 	print("\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ! СИСТЕМА ПОЛНОСТЬЮ ИСПРАВНА!")
 	quit(0)

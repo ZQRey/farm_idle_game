@@ -46,7 +46,7 @@ static func init_from_settings() -> void:
 	save_to_settings()
 
 static func write_to_config() -> void:
-	SettingsManager.config.set_value("multi_fields", "fields", fields)
+	SettingsManager.config.set_value("multi_fields", "fields", fields.duplicate(true))
 	SettingsManager.config.set_value("multi_fields", "last_update_at", last_update_at)
 	SettingsManager.config.set_value("multi_fields", "total_aux_cycles", total_aux_cycles)
 	SettingsManager.config.set_value("multi_fields", "total_aux_harvest_kg", total_aux_harvest_kg)

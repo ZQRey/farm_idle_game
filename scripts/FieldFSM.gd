@@ -99,8 +99,11 @@ var floating_label: Label
 # Позиции техники и анимации
 var vehicle_x: float = -100.0
 var vehicle_speed: float = 120.0
+const FUEL_BURN_LITERS_PER_SECOND: float = 0.12
 var truck_fill_stage: int = 0
 var anim_timer: float = 0.0
+const CUSTOM_DRAW_FPS: float = 12.0
+var custom_draw_accumulator: float = 0.0
 
 # Флаги кризисных событий
 var is_strike_active: bool = false
@@ -333,7 +336,14 @@ func _process(delta: float) -> void:
 	_update_greenhouses(delta)
 	_update_volunteers_visuals(delta)
 	_update_fsm(delta)
-	queue_redraw()
+
+	# Техника/работники — отдельные Sprite2D и двигаются каждый кадр.
+	# Тяжёлый custom _draw (тайлы, растения, деревья, здания) ограничиваем 12 FPS.
+	custom_draw_accumulator += delta
+	var draw_interval: float = 1.0 / CUSTOM_DRAW_FPS
+	if custom_draw_accumulator >= draw_interval:
+		custom_draw_accumulator = fmod(custom_draw_accumulator, draw_interval)
+		queue_redraw()
 
 func set_season(s: int) -> void:
 	current_season = s
@@ -393,7 +403,7 @@ func _update_fsm(delta: float) -> void:
 			rw.visible = false
 
 	# 2. ПОЛОМКА ТЕХНИКИ: идет черный дым и пламя (только когда на поле работает техника)
-	var has_active_vehicle: bool = (current_state != State.GROWING and current_state != State.WATERING)
+	var has_active_vehicle: bool = (current_state != State.GROWING)
 	if current_state == State.SOWING and not GameManager.has_seeder_tractor:
 		has_active_vehicle = false
 
@@ -421,7 +431,7 @@ func _update_fsm(delta: float) -> void:
 
 	# Расход бензина работающей техникой
 	if has_active_vehicle:
-		GameManager.consume_fuel(delta * 0.75 * _get_active_fuel_multiplier())
+		GameManager.consume_fuel(delta * FUEL_BURN_LITERS_PER_SECOND * _get_active_fuel_multiplier())
 
 	# Коэффициенты скорости: топливо, износ, волонтёры
 	var fuel_speed_mod: float = 1.0 if GameManager.fuel_level > 0.0 else 0.25

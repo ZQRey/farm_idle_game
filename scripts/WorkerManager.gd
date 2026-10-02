@@ -104,7 +104,7 @@ static func init_from_settings() -> void:
 	save_to_settings()
 
 static func write_to_config() -> void:
-	SettingsManager.config.set_value("workers", "roster", workers)
+	SettingsManager.config.set_value("workers", "roster", workers.duplicate(true))
 	SettingsManager.config.set_value("workers", "next_worker_id", next_worker_id)
 	SettingsManager.config.set_value("workers", "total_hired", total_hired)
 	SettingsManager.config.set_value("workers", "total_levels_gained", total_levels_gained)

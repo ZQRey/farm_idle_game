@@ -406,7 +406,11 @@ func save_all_state() -> void:
 		field.save_field_state()
 	if event_manager != null:
 		event_manager.save_event_state()
-	print("[Main] Текущее состояние игры успешно сохранено.")
+	var flushed: bool = SettingsManager.flush_pending(true)
+	if not flushed:
+		push_error("[Main] Не удалось записать полное состояние игры на диск.")
+	else:
+		print("[Main] Текущее состояние игры успешно сохранено.")
 
 func _on_quit_requested() -> void:
 	save_all_state()

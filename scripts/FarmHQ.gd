@@ -220,9 +220,9 @@ func _on_tab_changed(_idx: int) -> void:
 	_update_ui()
 
 func open_hq() -> void:
+	show()
 	_refresh_seeds_ui()
 	_update_ui()
-	show()
 	grab_focus()
 
 func _setup_progression_ui() -> void:
@@ -2329,7 +2329,7 @@ func _refresh_prestige_ui() -> void:
 
 	var permanent: Label = Label.new()
 	permanent.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	permanent.text = "Каждый Prestige навсегда даёт: +3% урожайности, +2% к цене продажи, +1 п.п. offline efficiency и +50 стартовых монет. Максимум — %d рангов." % PrestigeManager.MAX_PRESTIGE_RANK
+	permanent.text = "Каждый Prestige навсегда даёт: +3%% урожайности, +2%% к цене продажи, +1 п.п. offline efficiency и +50 стартовых монет. Максимум — %d рангов." % PrestigeManager.MAX_PRESTIGE_RANK
 	prestige_container.add_child(permanent)
 
 	var keep: Label = Label.new()
@@ -2387,21 +2387,46 @@ func _setup_repair_buttons() -> void:
 			_update_ui()
 		)
 
+func _refresh_visible_dynamic_tab() -> void:
+	if tab_container == null:
+		return
+	var current: Control = tab_container.get_current_tab_control()
+	if current == null:
+		return
+	match current.name:
+		"Контракты":
+			_refresh_contracts_ui()
+		"Склад":
+			_refresh_storage_ui()
+		"Рынок":
+			_refresh_market_ui()
+		"Автопарк":
+			_refresh_fleet_ui()
+		"Работники":
+			_refresh_workers_ui()
+		"Инфраструктура":
+			_refresh_buildings_ui()
+		"События":
+			_refresh_positive_events_ui()
+		"Достижения":
+			_refresh_achievements_ui()
+		"Офлайн":
+			_refresh_offline_ui()
+		"Животноводство":
+			_refresh_livestock_ui()
+		"Переработка":
+			_refresh_processing_ui()
+		"Участки":
+			_refresh_fields_ui()
+		"Специализация":
+			_refresh_specialization_ui()
+		"Prestige":
+			_refresh_prestige_ui()
+
 func _update_ui() -> void:
-	_refresh_contracts_ui()
-	_refresh_storage_ui()
-	_refresh_market_ui()
-	_refresh_fleet_ui()
-	_refresh_workers_ui()
-	_refresh_buildings_ui()
-	_refresh_positive_events_ui()
-	_refresh_achievements_ui()
-	_refresh_offline_ui()
-	_refresh_livestock_ui()
-	_refresh_processing_ui()
-	_refresh_fields_ui()
-	_refresh_specialization_ui()
-	_refresh_prestige_ui()
+	# Динамические вкладки создают много Control-узлов. Перестраиваем только
+	# активную вкладку вместо всех 14 секций при каждом игровом событии.
+	_refresh_visible_dynamic_tab()
 
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins
@@ -2444,9 +2469,9 @@ func _update_ui() -> void:
 		if is_pol:
 			var fine_amt: int = 40 if GameManager.has_guard_dog else 80
 			var bribe_amt: int = max(10, int(GameManager.coins * 0.10))
-			btn_police_fine.text = "📋 Штраф (%d 🪙)" % fine_amt
+			btn_police_fine.text = "📋 Штраф проверки (%d 🪙)" % fine_amt
 			btn_police_fine.disabled = (GameManager.coins < fine_amt)
-			btn_police_bribe.text = "🤝 Взятка (%d 🪙)" % bribe_amt
+			btn_police_bribe.text = "🧾 Экспресс-проверка (%d 🪙)" % bribe_amt
 			btn_police_bribe.disabled = (GameManager.coins < bribe_amt)
 
 	# Кнопка урегулирования забастовки сеятелей
@@ -2626,11 +2651,11 @@ func _update_ui() -> void:
 			_apply_feature_purchase_state(btn_buy_gh, "greenhouse", "Купить теплицу (700 🪙)", 700)
 	if lbl_gh_crop_info != null:
 		var gh_data: Dictionary = GameManager.get_current_greenhouse_data()
-		lbl_gh_crop_info.text = "%s: доход +%d 🪙 (семена %d 🪙, созревание %.0f сек)" % [
+		lbl_gh_crop_info.text = "%s: доход +%d 🪙 (семена %d 🪙, созревание %.1f мин)" % [
 			gh_data.get("name", ""),
 			gh_data.get("reward", 0),
 			gh_data.get("seed_cost", 0),
-			gh_data.get("growth_time", 20.0)
+			float(gh_data.get("growth_time", 480.0)) / 60.0
 		]
 
 	# Производство и ТО: Волонтёры
@@ -2687,8 +2712,8 @@ func _refresh_seeds_ui() -> void:
 		var required_level: int = ProgressionManager.get_crop_required_level(this_cid)
 
 		var lbl_info: Label = Label.new()
-		lbl_info.text = "%s\n⏱ Рост: %.0fc | 💰 Доход: +%d 🪙 | 🌱 Семена: %d 🪙/цикл | ⭐ Ур. %d" % [
-			c_data.name, c_data.growth_time, c_data.base_reward, c_data.seed_cost, required_level
+		lbl_info.text = "%s\n⏱ Рост: %.1f мин | 💰 База: +%d 🪙 / 100 кг | 🌱 Семена: %d 🪙/цикл | ⭐ Ур. %d" % [
+			c_data.name, float(c_data.growth_time) / 60.0, c_data.base_reward, c_data.seed_cost, required_level
 		]
 		lbl_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hbox.add_child(lbl_info)
@@ -2876,7 +2901,8 @@ func _setup_monitors_list() -> void:
 		var opt: Dictionary = options[i]
 		opt_monitors.add_item(opt.title, i)
 		opt_monitors.set_item_metadata(i, opt.id)
-		if opt.id == current_screen:
+		opt_monitors.set_item_disabled(i, not bool(opt.get("enabled", true)))
+		if opt.id == current_screen and bool(opt.get("enabled", true)):
 			select_idx = i
 
 	opt_monitors.selected = select_idx
