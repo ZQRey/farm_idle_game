@@ -174,8 +174,8 @@ static func init_from_settings() -> void:
 	save_to_settings()
 
 static func write_to_config() -> void:
-	SettingsManager.config.set_value("achievements", "unlocked", unlocked)
-	SettingsManager.config.set_value("achievements", "unlocked_at", unlocked_at)
+	SettingsManager.config.set_value("achievements", "unlocked", unlocked.duplicate())
+	SettingsManager.config.set_value("achievements", "unlocked_at", unlocked_at.duplicate(true))
 	SettingsManager.config.set_value("achievements", "active_title", active_title)
 	SettingsManager.config.set_value("achievements", "total_points", total_points)
 
