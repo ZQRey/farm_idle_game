@@ -136,6 +136,14 @@ static func process_due_ticks(max_ticks: int = 12) -> Dictionary:
 	save_to_settings()
 	return report
 
+static func process_offline_seconds(credited_seconds: int, efficiency: float) -> Dictionary:
+	var effective: float = float(max(0, credited_seconds)) * clampf(efficiency, 0.0, 1.0)
+	var ticks: int = int(floor(effective / float(TICK_SECONDS)))
+	var report: Dictionary = process_ticks(ticks)
+	last_tick_at = _now()
+	save_to_settings()
+	return report
+
 static func process_ticks(tick_count: int) -> Dictionary:
 	var report: Dictionary = _empty_report()
 	for _i in range(max(0, tick_count)):
