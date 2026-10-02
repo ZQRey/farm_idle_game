@@ -14,6 +14,7 @@ const BuildingManager = preload("res://scripts/BuildingManager.gd")
 const QualityManager = preload("res://scripts/QualityManager.gd")
 const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
 const AchievementManager = preload("res://scripts/AchievementManager.gd")
+const OfflineProgressManager = preload("res://scripts/OfflineProgressManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 
@@ -691,6 +692,58 @@ func _init() -> void:
 	PositiveEventManager.save_to_settings()
 	assert(int(SettingsManager.config.get_value("statistics", "total_harvested", -1)) == ach_old_harvests, "Lifetime-статистика урожаев должна persistиться")
 	assert(int(SettingsManager.config.get_value("statistics", "total_coins_earned", -1)) == ach_old_coins, "Lifetime-статистика монет должна persistиться")
+
+	# 17. Тест: offline progress, cap, эффективность и защита от временных бонусов
+	print("\n[ТЕСТ 17] Проверка offline progress:")
+	var old_offline_last_seen: int = OfflineProgressManager.last_seen_at
+	var old_offline_report: Dictionary = OfflineProgressManager.last_report.duplicate(true)
+	var old_offline_seconds: int = OfflineProgressManager.lifetime_offline_seconds
+	var old_offline_cycles: int = OfflineProgressManager.lifetime_offline_cycles
+	var old_positive_for_offline: Dictionary = PositiveEventManager.active_event.duplicate(true)
+	var old_positive_total_for_offline: int = PositiveEventManager.total_triggered
+	var old_positive_rare_for_offline: int = PositiveEventManager.rare_triggered
+
+	var ten_hours: Dictionary = OfflineProgressManager.calculate_offline_window(1000, 1000 + 10 * 3600)
+	assert(int(ten_hours.get("raw_seconds", 0)) == 10 * 3600, "Должно определиться 10 часов отсутствия")
+	assert(int(ten_hours.get("credited_seconds", 0)) == OfflineProgressManager.MAX_OFFLINE_SECONDS, "Офлайн должен ограничиваться 8 часами")
+	assert(bool(ten_hours.get("was_capped", false)), "Для 10 часов должен сработать cap")
+	assert(int(ten_hours.get("possible_cycles", 0)) == 17, "8 часов × 65% должны дать 17 полных 18-минутных циклов")
+
+	var short_window: Dictionary = OfflineProgressManager.calculate_offline_window(1000, 1030)
+	assert(int(short_window.get("possible_cycles", 0)) == 0, "30 секунд не должны давать полный цикл")
+	assert(OfflineProgressManager.get_efficiency_percent() == 65, "Эффективность offline должна быть 65%")
+	assert(OfflineProgressManager.get_max_offline_hours() == 8, "Лимит offline должен быть 8 часов")
+
+	PositiveEventManager.active_event = {}
+	PositiveEventManager.total_triggered = 0
+	PositiveEventManager.rare_triggered = 0
+	PositiveEventManager.initialized = true
+	PositiveEventManager.start_event("farm_fair")
+	var online_sale: int = GameManager.calculate_crop_sale_value("wheat", 100.0, "B", true)
+	var offline_sale: int = GameManager.calculate_crop_sale_value("wheat", 100.0, "B", false)
+	assert(online_sale > offline_sale, "Фермерская ярмарка должна усиливать онлайн-продажу, но не offline")
+
+	OfflineProgressManager.initialized = true
+	OfflineProgressManager.last_seen_at = 123456
+	OfflineProgressManager.lifetime_offline_seconds = 7200
+	OfflineProgressManager.lifetime_offline_cycles = 4
+	OfflineProgressManager.last_report = {"cycles_completed": 4}
+	OfflineProgressManager.save_to_settings()
+	assert(int(SettingsManager.config.get_value("offline", "last_seen_at", 0)) == 123456, "last_seen_at должен persistиться")
+	assert(int(SettingsManager.config.get_value("offline", "lifetime_offline_cycles", 0)) == 4, "Счётчик offline-циклов должен persistиться")
+	print("  ✔ ТЕСТ 17 УСПЕШНО ПРОЙДЕН!")
+
+	OfflineProgressManager.last_seen_at = old_offline_last_seen
+	OfflineProgressManager.last_report = old_offline_report
+	OfflineProgressManager.lifetime_offline_seconds = old_offline_seconds
+	OfflineProgressManager.lifetime_offline_cycles = old_offline_cycles
+	OfflineProgressManager.initialized = true
+	OfflineProgressManager.save_to_settings()
+	PositiveEventManager.active_event = old_positive_for_offline
+	PositiveEventManager.total_triggered = old_positive_total_for_offline
+	PositiveEventManager.rare_triggered = old_positive_rare_for_offline
+	PositiveEventManager.initialized = true
+	PositiveEventManager.save_to_settings()
 
 	print("\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ! СИСТЕМА ПОЛНОСТЬЮ ИСПРАВНА!")
 	quit(0)

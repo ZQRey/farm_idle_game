@@ -12,6 +12,7 @@ const MarketManager = preload("res://scripts/MarketManager.gd")
 const QualityManager = preload("res://scripts/QualityManager.gd")
 const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
 const AchievementManager = preload("res://scripts/AchievementManager.gd")
+const OfflineProgressManager = preload("res://scripts/OfflineProgressManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 const FarmHQ = preload("res://scripts/FarmHQ.gd")
@@ -35,7 +36,14 @@ func _ready() -> void:
 	if GameManager.has_barn:
 		InventoryManager.ensure_minimum_level(2)
 	MarketManager.init_from_settings()
+	var offline_report: Dictionary = OfflineProgressManager.init_and_apply()
 	AchievementManager.init_from_settings()
+	if int(offline_report.get("cycles_completed", 0)) > 0:
+		print("[Offline] %d циклов | %.0f кг | %+d 🪙" % [
+			int(offline_report.get("cycles_completed", 0)),
+			float(offline_report.get("harvested_kg", 0.0)),
+			int(offline_report.get("net_coins", 0))
+		])
 	_record_market_prices()
 	_process_market_auto_sales()
 	farm_hq._update_ui()
@@ -267,6 +275,7 @@ func _on_police_bribe() -> void:
 	farm_hq._update_ui()
 
 func save_all_state() -> void:
+	OfflineProgressManager.mark_active_now()
 	GameManager.save_to_settings()
 	ContractManager.save_to_settings()
 	InventoryManager.save_to_settings()
@@ -274,6 +283,7 @@ func save_all_state() -> void:
 	QualityManager.save_to_settings()
 	PositiveEventManager.save_to_settings()
 	AchievementManager.save_to_settings()
+	OfflineProgressManager.save_to_settings()
 	if field != null:
 		field.save_field_state()
 	if event_manager != null:

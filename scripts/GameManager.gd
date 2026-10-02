@@ -401,7 +401,7 @@ static func get_current_crop_data() -> Dictionary:
 	return CROPS.get(current_crop, CROPS["wheat"])
 
 ## Текущая цена продажи со склада: базовая стоимость × инфраструктура × сезон × рынок.
-static func calculate_crop_sale_value(crop_id: String, amount_kg: float, quality_grade: String = "B") -> int:
+static func calculate_crop_sale_value(crop_id: String, amount_kg: float, quality_grade: String = "B", include_temporary_bonus: bool = true) -> int:
 	if amount_kg <= 0.0:
 		return 0
 	var data: Dictionary = CROPS.get(crop_id, CROPS["wheat"])
@@ -415,15 +415,16 @@ static func calculate_crop_sale_value(crop_id: String, amount_kg: float, quality
 	value *= get_season_price_multiplier()
 	value *= MarketManager.get_effective_multiplier(crop_id)
 	value *= QualityManager.get_price_multiplier(quality_grade)
-	value *= PositiveEventManager.get_sale_multiplier()
+	if include_temporary_bonus:
+		value *= PositiveEventManager.get_sale_multiplier()
 	return max(0, int(round(value)))
 
-static func calculate_quality_breakdown_sale_value(crop_id: String, breakdown: Dictionary) -> int:
+static func calculate_quality_breakdown_sale_value(crop_id: String, breakdown: Dictionary, include_temporary_bonus: bool = true) -> int:
 	var total: int = 0
 	for grade in QualityManager.GRADES:
 		var amount: float = max(0.0, float(breakdown.get(grade, 0.0)))
 		if amount > 0.0:
-			total += calculate_crop_sale_value(crop_id, amount, grade)
+			total += calculate_crop_sale_value(crop_id, amount, grade, include_temporary_bonus)
 	return total
 
 # ==============================================================================
