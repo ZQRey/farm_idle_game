@@ -14,6 +14,7 @@ const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
 const AchievementManager = preload("res://scripts/AchievementManager.gd")
 const OfflineProgressManager = preload("res://scripts/OfflineProgressManager.gd")
 const LivestockManager = preload("res://scripts/LivestockManager.gd")
+const ProcessingManager = preload("res://scripts/ProcessingManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 const FarmHQ = preload("res://scripts/FarmHQ.gd")
@@ -38,8 +39,13 @@ func _ready() -> void:
 		InventoryManager.ensure_minimum_level(2)
 	MarketManager.init_from_settings()
 	LivestockManager.init_from_settings()
+	ProcessingManager.init_from_settings()
 	var offline_report: Dictionary = OfflineProgressManager.init_and_apply()
 	var livestock_offline: Dictionary = LivestockManager.process_offline_seconds(
+		int(offline_report.get("credited_seconds", 0)),
+		OfflineProgressManager.OFFLINE_EFFICIENCY
+	)
+	var processing_offline: Dictionary = ProcessingManager.process_offline_seconds(
 		int(offline_report.get("credited_seconds", 0)),
 		OfflineProgressManager.OFFLINE_EFFICIENCY
 	)
@@ -56,6 +62,15 @@ func _ready() -> void:
 			float(livestock_offline.get("eggs", 0.0)),
 			float(livestock_offline.get("milk_l", 0.0)),
 			int(livestock_offline.get("coins", 0))
+		])
+	if int(processing_offline.get("ticks", 0)) > 0:
+		var offline_outputs: Dictionary = processing_offline.get("outputs", {})
+		print("[Processing Offline] %d тиков | мука %.0f | масло %.0f | сыр %.0f | %+d 🪙" % [
+			int(processing_offline.get("ticks", 0)),
+			float(offline_outputs.get("flour", 0.0)),
+			float(offline_outputs.get("oil", 0.0)),
+			float(offline_outputs.get("cheese", 0.0)),
+			int(processing_offline.get("coins", 0))
 		])
 	_record_market_prices()
 	_process_market_auto_sales()
@@ -144,7 +159,14 @@ func _ready() -> void:
 	livestock_timer.timeout.connect(_on_livestock_timer)
 	add_child(livestock_timer)
 
-	# 11. Рыночный цикл: проверка цены и правил автопродажи каждые 15 секунд.
+	# 11. Переработка: проверяем готовность производственного тика каждые 30 секунд.
+	var processing_timer: Timer = Timer.new()
+	processing_timer.wait_time = 30.0
+	processing_timer.autostart = true
+	processing_timer.timeout.connect(_on_processing_timer)
+	add_child(processing_timer)
+
+	# 12. Рыночный цикл: проверка цены и правил автопродажи каждые 15 секунд.
 	var market_timer: Timer = Timer.new()
 	market_timer.wait_time = 15.0
 	market_timer.autostart = true
@@ -192,6 +214,12 @@ func _on_harvest_completed(_coins_earned: int) -> void:
 
 func _on_livestock_timer() -> void:
 	var report: Dictionary = LivestockManager.process_due_ticks()
+	if int(report.get("ticks", 0)) > 0:
+		_check_achievements()
+		farm_hq._update_ui()
+
+func _on_processing_timer() -> void:
+	var report: Dictionary = ProcessingManager.process_due_ticks()
 	if int(report.get("ticks", 0)) > 0:
 		_check_achievements()
 		farm_hq._update_ui()
@@ -279,6 +307,7 @@ func _on_bankruptcy_requested() -> void:
 	MarketManager.reset_all()
 	QualityManager.reset_all()
 	LivestockManager.reset_all()
+	ProcessingManager.reset_all()
 	farm_hq._refresh_contracts_ui()
 	farm_hq._refresh_storage_ui()
 	farm_hq._refresh_market_ui()
@@ -312,6 +341,7 @@ func save_all_state() -> void:
 	AchievementManager.save_to_settings()
 	OfflineProgressManager.save_to_settings()
 	LivestockManager.save_to_settings()
+	ProcessingManager.save_to_settings()
 	if field != null:
 		field.save_field_state()
 	if event_manager != null:
