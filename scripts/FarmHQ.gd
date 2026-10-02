@@ -5,6 +5,7 @@ const GameManager = preload("res://scripts/GameManager.gd")
 const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
 const ContractManager = preload("res://scripts/ContractManager.gd")
 const InventoryManager = preload("res://scripts/InventoryManager.gd")
+const MarketManager = preload("res://scripts/MarketManager.gd")
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const WindowManager = preload("res://scripts/WindowManager.gd")
 
@@ -39,6 +40,9 @@ var contracts_container: VBoxContainer
 
 # Склад (динамическая вкладка)
 var storage_container: VBoxContainer
+
+# Рынок (динамическая вкладка)
+var market_container: VBoxContainer
 
 # Магазин семян
 @onready var seed_container: VBoxContainer = $VBox/TabContainer/Магазин/ScrollSeeds/VBoxSeeds
@@ -131,6 +135,7 @@ func _ready() -> void:
 	_setup_progression_ui()
 	_setup_contracts_tab()
 	_setup_storage_tab()
+	_setup_market_tab()
 	_setup_monitors_list()
 	_setup_graphics_and_fps()
 	_setup_garage_and_decor()
@@ -523,7 +528,7 @@ func _refresh_storage_ui() -> void:
 
 		var info: Label = Label.new()
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		info.text = "%s: %.0f кг | текущая фиксированная цена: %d 🪙 / 100 кг" % [crop_name, amount, price_100]
+		info.text = "%s: %.0f кг | текущая рыночная цена: %d 🪙 / 100 кг" % [crop_name, amount, price_100]
 		row.add_child(info)
 
 		var sell_100: Button = Button.new()
@@ -553,6 +558,163 @@ func _refresh_storage_ui() -> void:
 	]
 	storage_container.add_child(overflow_note)
 
+func _setup_market_tab() -> void:
+	if market_container != null:
+		return
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.name = "Рынок"
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	tab_container.add_child(margin)
+
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
+
+	market_container = VBoxContainer.new()
+	market_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	market_container.add_theme_constant_override("separation", 10)
+	scroll.add_child(market_container)
+
+func _history_price_text(crop_id: String) -> String:
+	var history: Array = MarketManager.get_history(crop_id)
+	if history.is_empty():
+		return "нет истории"
+
+	var parts: Array[String] = []
+	var start_idx: int = max(0, history.size() - 8)
+	for i in range(start_idx, history.size()):
+		var entry: Dictionary = history[i]
+		var price: int = int(entry.get("price", 0))
+		if price > 0:
+			parts.append(str(price))
+		else:
+			var idx_value: int = int(round(float(entry.get("effective_multiplier", 1.0)) * 100.0))
+			parts.append("%d%%" % idx_value)
+	return " → ".join(PackedStringArray(parts))
+
+func _refresh_market_ui() -> void:
+	if market_container == null:
+		return
+
+	for child in market_container.get_children():
+		child.queue_free()
+
+	if not MarketManager.initialized:
+		var loading: Label = Label.new()
+		loading.text = "📊 Рынок загружается..."
+		market_container.add_child(loading)
+		return
+
+	var title: Label = Label.new()
+	title.add_theme_font_size_override("font_size", 16)
+	title.text = "📊 Товарная биржа фермы"
+	market_container.add_child(title)
+
+	var event_label: Label = Label.new()
+	var event_left: int = MarketManager.get_event_seconds_left()
+	event_label.text = "%s%s" % [
+		MarketManager.get_active_event_text(),
+		(" | осталось %s" % _format_contract_time(event_left)) if event_left > 0 else ""
+	]
+	market_container.add_child(event_label)
+
+	var tick_label: Label = Label.new()
+	tick_label.text = "Следующее изменение котировок через %s | Автопродажа рынком: %.0f кг на %d 🪙" % [
+		_format_contract_time(MarketManager.get_seconds_to_next_tick()),
+		MarketManager.total_auto_sold_kg,
+		MarketManager.total_auto_sale_gross
+	]
+	market_container.add_child(tick_label)
+
+	var note: Label = Label.new()
+	note.text = "Правила ниже продают накопленный склад автоматически, когда цена за 100 кг достигает заданного порога."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	market_container.add_child(note)
+
+	for crop_id in InventoryManager.CROP_IDS:
+		var crop_data: Dictionary = GameManager.CROPS.get(crop_id, {})
+		var crop_name: String = str(crop_data.get("name", crop_id))
+		var current_price: int = GameManager.calculate_crop_sale_value(crop_id, 100.0)
+		var trend: int = MarketManager.get_trend(crop_id)
+		var trend_icon: String = "➡"
+		if trend > 0:
+			trend_icon = "📈"
+		elif trend < 0:
+			trend_icon = "📉"
+
+		var panel: PanelContainer = PanelContainer.new()
+		var vbox: VBoxContainer = VBoxContainer.new()
+		vbox.add_theme_constant_override("separation", 5)
+		panel.add_child(vbox)
+
+		var header: HBoxContainer = HBoxContainer.new()
+		vbox.add_child(header)
+
+		var price_label: Label = Label.new()
+		price_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		price_label.add_theme_font_size_override("font_size", 15)
+		price_label.text = "%s %s — %d 🪙 / 100 кг | склад: %.0f кг" % [
+			trend_icon,
+			crop_name,
+			current_price,
+			InventoryManager.get_stock(crop_id)
+		]
+		header.add_child(price_label)
+
+		var market_index: Label = Label.new()
+		market_index.text = "Индекс %.0f%%" % (MarketManager.get_effective_multiplier(crop_id) * 100.0)
+		header.add_child(market_index)
+
+		var history_label: Label = Label.new()
+		history_label.text = "История: %s" % _history_price_text(crop_id)
+		vbox.add_child(history_label)
+
+		var rule_row: HBoxContainer = HBoxContainer.new()
+		rule_row.add_theme_constant_override("separation", 8)
+		vbox.add_child(rule_row)
+
+		var rule: Dictionary = MarketManager.get_auto_sell_rule(crop_id)
+		var threshold_value: int = int(rule.get("min_price", 0))
+		if threshold_value <= 0:
+			threshold_value = current_price
+
+		var enabled_check: CheckBox = CheckBox.new()
+		enabled_check.text = "Автопродажа"
+		enabled_check.set_pressed_no_signal(bool(rule.get("enabled", false)))
+		rule_row.add_child(enabled_check)
+
+		var threshold_label: Label = Label.new()
+		threshold_label.text = "если цена ≥"
+		rule_row.add_child(threshold_label)
+
+		var threshold: SpinBox = SpinBox.new()
+		threshold.min_value = 1
+		threshold.max_value = 10000
+		threshold.step = 1
+		threshold.value = threshold_value
+		threshold.custom_minimum_size = Vector2(115, 0)
+		rule_row.add_child(threshold)
+
+		var units: Label = Label.new()
+		units.text = "🪙 / 100 кг"
+		units.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		rule_row.add_child(units)
+
+		var cid: String = crop_id
+		enabled_check.toggled.connect(func(enabled: bool, target_crop: String = cid, spin: SpinBox = threshold):
+			MarketManager.set_auto_sell_rule(target_crop, enabled, int(spin.value))
+		)
+		threshold.value_changed.connect(func(value: float, target_crop: String = cid, check: CheckBox = enabled_check):
+			MarketManager.set_auto_sell_rule(target_crop, check.button_pressed, int(value))
+		)
+
+		market_container.add_child(panel)
+
 func _setup_repair_buttons() -> void:
 	var do_repair = func():
 		repair_requested.emit()
@@ -570,6 +732,7 @@ func _setup_repair_buttons() -> void:
 func _update_ui() -> void:
 	_refresh_contracts_ui()
 	_refresh_storage_ui()
+	_refresh_market_ui()
 
 	if coins_label != null:
 		coins_label.text = "%d 🪙" % GameManager.coins

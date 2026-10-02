@@ -8,6 +8,7 @@ const AssetGenerator = preload("res://tools/AssetGenerator.gd")
 const GameManager = preload("res://scripts/GameManager.gd")
 const ContractManager = preload("res://scripts/ContractManager.gd")
 const InventoryManager = preload("res://scripts/InventoryManager.gd")
+const MarketManager = preload("res://scripts/MarketManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 const FarmHQ = preload("res://scripts/FarmHQ.gd")
@@ -30,6 +31,9 @@ func _ready() -> void:
 	InventoryManager.init_from_settings()
 	if GameManager.has_barn:
 		InventoryManager.ensure_minimum_level(2)
+	MarketManager.init_from_settings()
+	_record_market_prices()
+	_process_market_auto_sales()
 	farm_hq._update_ui()
 
 	# 2. Ограничение FPS (по умолчанию 30 FPS для минимальной нагрузки)
@@ -104,6 +108,13 @@ func _ready() -> void:
 	autosave_timer.timeout.connect(save_all_state)
 	add_child(autosave_timer)
 
+	# 10. Рыночный цикл: проверка цены и правил автопродажи каждые 15 секунд.
+	var market_timer: Timer = Timer.new()
+	market_timer.wait_time = 15.0
+	market_timer.autostart = true
+	market_timer.timeout.connect(_on_market_timer)
+	add_child(market_timer)
+
 	print("[Main] Farm Idle Companion fully operational!")
 
 func _init_graphics_shader() -> void:
@@ -139,7 +150,57 @@ func _on_tractor_color_changed(color: Color) -> void:
 		field.vehicle_sprite.modulate = color
 
 func _on_harvest_completed(_coins_earned: int) -> void:
+	_process_market_auto_sales()
 	farm_hq._update_ui()
+
+func _on_market_timer() -> void:
+	var market_changed: bool = MarketManager.update_market(false)
+	if market_changed:
+		_record_market_prices()
+	var sold_any: bool = _process_market_auto_sales()
+	if market_changed or sold_any:
+		farm_hq._update_ui()
+	else:
+		farm_hq._refresh_market_ui()
+
+func _record_market_prices() -> void:
+	if not MarketManager.initialized:
+		return
+	var prices: Dictionary = {}
+	for crop_id in InventoryManager.CROP_IDS:
+		prices[crop_id] = GameManager.calculate_crop_sale_value(crop_id, 100.0)
+	MarketManager.record_current_prices(prices)
+
+func _process_market_auto_sales() -> bool:
+	if not MarketManager.initialized or not InventoryManager.initialized:
+		return false
+
+	var sold_any: bool = false
+	for crop_id in InventoryManager.CROP_IDS:
+		var amount: float = InventoryManager.get_stock(crop_id)
+		if amount <= 0.0:
+			continue
+
+		var current_price: int = GameManager.calculate_crop_sale_value(crop_id, 100.0)
+		if not MarketManager.should_auto_sell(crop_id, current_price):
+			continue
+
+		var sold_kg: float = InventoryManager.remove_crop(crop_id, amount)
+		if sold_kg <= 0.0:
+			continue
+
+		var gross: int = GameManager.calculate_crop_sale_value(crop_id, sold_kg)
+		var sale: Dictionary = GameManager.process_sale_finances(gross)
+		MarketManager.register_auto_sale(crop_id, sold_kg, gross)
+		sold_any = true
+		print("[Market] Автопродажа %s: %.0f кг, валовая выручка %d, чистыми %d" % [
+			crop_id,
+			sold_kg,
+			gross,
+			int(sale.get("net_coins", 0))
+		])
+
+	return sold_any
 
 func _on_weather_changed(w_enum: int, w_name: String) -> void:
 	tray_manager.weather_string = w_name
@@ -159,8 +220,10 @@ func _on_bankruptcy_requested() -> void:
 	event_manager.reset_all_events()
 	ContractManager.reset_all_contracts()
 	InventoryManager.reset_all()
+	MarketManager.reset_all()
 	farm_hq._refresh_contracts_ui()
 	farm_hq._refresh_storage_ui()
+	farm_hq._refresh_market_ui()
 	farm_hq._update_ui()
 	print("[Main] Ферма объявила банкротство: долги списаны, поле и техника сброшены!")
 
@@ -168,6 +231,8 @@ func _on_season_changed(_season: GameManager.Season, season_name: String) -> voi
 	tray_manager.season_string = season_name
 	if field != null:
 		field.set_season(int(_season))
+	_record_market_prices()
+	_process_market_auto_sales()
 	farm_hq._update_ui()
 
 func _on_police_fine() -> void:
@@ -182,6 +247,7 @@ func save_all_state() -> void:
 	GameManager.save_to_settings()
 	ContractManager.save_to_settings()
 	InventoryManager.save_to_settings()
+	MarketManager.save_to_settings()
 	if field != null:
 		field.save_field_state()
 	if event_manager != null:
