@@ -120,10 +120,14 @@ static func buy_cow() -> bool:
 	return true
 
 static func can_feed_chickens() -> bool:
-	return chickens > 0 		and InventoryManager.get_stock("wheat") >= CHICKEN_WHEAT_KG * chickens 		and InventoryManager.get_stock("corn") >= CHICKEN_CORN_KG * chickens
+	var wheat_needed: float = CHICKEN_WHEAT_KG * float(chickens)
+	var corn_needed: float = CHICKEN_CORN_KG * float(chickens)
+	return chickens > 0 and InventoryManager.get_stock("wheat") >= wheat_needed and InventoryManager.get_stock("corn") >= corn_needed
 
 static func can_feed_cows() -> bool:
-	return cows > 0 		and InventoryManager.get_stock("wheat") >= COW_WHEAT_KG * cows 		and InventoryManager.get_stock("corn") >= COW_CORN_KG * cows
+	var wheat_needed: float = COW_WHEAT_KG * float(cows)
+	var corn_needed: float = COW_CORN_KG * float(cows)
+	return cows > 0 and InventoryManager.get_stock("wheat") >= wheat_needed and InventoryManager.get_stock("corn") >= corn_needed
 
 static func process_due_ticks(max_ticks: int = 12) -> Dictionary:
 	var now: int = _now()
