@@ -3,6 +3,7 @@ extends RefCounted
 
 const SettingsManager = preload("res://scripts/SettingsManager.gd")
 const ProgressionManager = preload("res://scripts/ProgressionManager.gd")
+const QualityManager = preload("res://scripts/QualityManager.gd")
 
 const OFFER_COUNT: int = 3
 const MAX_ACTIVE_CONTRACTS: int = 3
@@ -19,6 +20,7 @@ const TIER_ORDER: Array[String] = ["standard", "profitable", "urgent"]
 const TIER_DATA: Dictionary = {
 	"standard": {
 		"title": "Обычный заказ",
+		"min_quality": "C",
 		"icon": "📦",
 		"target_min": 2,
 		"target_max": 3,
@@ -29,6 +31,7 @@ const TIER_DATA: Dictionary = {
 	},
 	"profitable": {
 		"title": "Выгодный контракт",
+		"min_quality": "B",
 		"icon": "💰",
 		"target_min": 3,
 		"target_max": 5,
@@ -39,6 +42,7 @@ const TIER_DATA: Dictionary = {
 	},
 	"urgent": {
 		"title": "Срочный заказ",
+		"min_quality": "A",
 		"icon": "⏱",
 		"target_min": 1,
 		"target_max": 2,
@@ -130,7 +134,7 @@ static func accept_contract(contract_id: String) -> bool:
 
 	return false
 
-static func record_harvest(crop_id: String) -> Array:
+static func record_harvest(crop_id: String, quality_grade: String = "B") -> Array:
 	if not initialized:
 		return []
 	_expire_active_contracts()
@@ -140,6 +144,9 @@ static func record_harvest(crop_id: String) -> Array:
 	for i in range(active_contracts.size() - 1, -1, -1):
 		var contract: Dictionary = active_contracts[i]
 		if str(contract.get("crop_id", "")) != crop_id:
+			continue
+		var min_quality: String = str(contract.get("min_quality", "C"))
+		if not QualityManager.meets_minimum(quality_grade, min_quality):
 			continue
 
 		var target: int = max(1, int(contract.get("target", 1)))
@@ -243,6 +250,7 @@ static func _generate_contract(tier_id: String, now: int) -> Dictionary:
 		"reward_coins": reward_coins,
 		"reward_xp": reward_xp,
 		"reward_rep": reward_rep,
+		"min_quality": str(tier.get("min_quality", "C")),
 		"expires_at": now + ttl,
 		"created_at": now
 	}
