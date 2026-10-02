@@ -171,6 +171,14 @@ static func get_total_salary_per_cycle() -> int:
 		total += int(worker.get("salary", 0))
 	return total
 
+static func get_total_profession_level(profession: String) -> int:
+	var total: int = 0
+	for worker_id in workers:
+		var worker: Dictionary = workers[worker_id]
+		if str(worker.get("profession", "")) == profession:
+			total += clampi(int(worker.get("level", 1)), 1, MAX_LEVEL)
+	return total
+
 static func get_phase_speed_multiplier(phase: String) -> float:
 	if not initialized:
 		return 1.0
