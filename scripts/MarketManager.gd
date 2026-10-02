@@ -125,10 +125,14 @@ static func update_market(force: bool = false) -> bool:
 		return false
 
 	var now: int = _now()
+	var had_event: bool = not active_event.is_empty()
 	_expire_event_if_needed(now)
+	var event_expired: bool = had_event and active_event.is_empty()
 
 	if not force and now < next_tick_at:
-		return false
+		if event_expired:
+			save_to_settings()
+		return event_expired
 
 	_run_price_tick(now)
 	save_to_settings()
