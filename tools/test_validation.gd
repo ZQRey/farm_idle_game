@@ -16,6 +16,7 @@ const PositiveEventManager = preload("res://scripts/PositiveEventManager.gd")
 const AchievementManager = preload("res://scripts/AchievementManager.gd")
 const OfflineProgressManager = preload("res://scripts/OfflineProgressManager.gd")
 const LivestockManager = preload("res://scripts/LivestockManager.gd")
+const ProcessingManager = preload("res://scripts/ProcessingManager.gd")
 const FieldFSM = preload("res://scripts/FieldFSM.gd")
 const EventManager = preload("res://scripts/EventManager.gd")
 
@@ -841,6 +842,103 @@ func _init() -> void:
 	InventoryManager.stock = old_livestock_stock
 	InventoryManager.quality_stock = old_livestock_quality_stock
 	InventoryManager.save_to_settings()
+	GameManager.save_to_settings()
+
+	# 19. Тест: переработка, производственные цепочки, продажа и persistence
+	print("\n[ТЕСТ 19] Проверка переработки:")
+	var old_processing_levels: Dictionary = ProcessingManager.facility_levels.duplicate(true)
+	var old_processing_products: Dictionary = ProcessingManager.products.duplicate(true)
+	var old_processing_lifetime: Dictionary = ProcessingManager.lifetime_output.duplicate(true)
+	var old_processing_auto_sell: bool = ProcessingManager.auto_sell_products
+	var old_processing_batches: int = ProcessingManager.total_batches
+	var old_processing_coins: int = ProcessingManager.total_product_coins
+	var old_processing_tick: int = ProcessingManager.last_tick_at
+	var old_processing_game_coins: int = GameManager.coins
+	var old_processing_total_earned: int = GameManager.total_coins_earned
+	var old_processing_subsidy: int = GameManager.subsidy_debt
+	var old_processing_loan: int = GameManager.loan_debt
+	var old_processing_stock: Dictionary = InventoryManager.stock.duplicate(true)
+	var old_processing_quality_stock: Dictionary = InventoryManager.quality_stock.duplicate(true)
+	var old_processing_milk: float = LivestockManager.milk_l
+
+	ProcessingManager.initialized = true
+	ProcessingManager.facility_levels = {"flour_mill": 1, "oil_press": 1, "dairy": 1}
+	ProcessingManager.products = {"flour": 0.0, "oil": 0.0, "cheese": 0.0}
+	ProcessingManager.lifetime_output = {"flour": 0.0, "oil": 0.0, "cheese": 0.0}
+	ProcessingManager.auto_sell_products = false
+	ProcessingManager.total_batches = 0
+	ProcessingManager.total_product_coins = 0
+	GameManager.subsidy_debt = 0
+	GameManager.loan_debt = 0
+
+	InventoryManager.stock = {
+		"wheat": 120.0,
+		"corn": 0.0,
+		"sunflower": 60.0,
+		"carrot": 0.0
+	}
+	InventoryManager.quality_stock = {
+		"wheat": {"C": 0.0, "B": 120.0, "A": 0.0, "S": 0.0},
+		"corn": {"C": 0.0, "B": 0.0, "A": 0.0, "S": 0.0},
+		"sunflower": {"C": 0.0, "B": 60.0, "A": 0.0, "S": 0.0},
+		"carrot": {"C": 0.0, "B": 0.0, "A": 0.0, "S": 0.0}
+	}
+	LivestockManager.milk_l = 25.0
+
+	var processing_report: Dictionary = ProcessingManager.process_ticks(1)
+	assert(int(processing_report.get("batches", 0)) == 3, "Три цеха первого уровня должны выполнить 3 партии")
+	assert(is_equal_approx(ProcessingManager.get_product_amount("flour"), 70.0), "100 кг пшеницы должны дать 70 кг муки")
+	assert(is_equal_approx(ProcessingManager.get_product_amount("oil"), 18.0), "50 кг подсолнечника должны дать 18 л масла")
+	assert(is_equal_approx(ProcessingManager.get_product_amount("cheese"), 5.0), "20 л молока должны дать 5 кг сыра")
+	assert(is_equal_approx(InventoryManager.get_stock("wheat"), 20.0), "Мукомольный цех должен списать 100 кг пшеницы")
+	assert(is_equal_approx(InventoryManager.get_stock("sunflower"), 10.0), "Маслопресс должен списать 50 кг подсолнечника")
+	assert(is_equal_approx(LivestockManager.milk_l, 5.0), "Молочный цех должен списать 20 л молока")
+	assert(ProcessingManager.total_batches == 3, "Lifetime-счётчик партий должен увеличиться")
+
+	var processing_coins_before_sale: int = GameManager.coins
+	var processing_sale: int = ProcessingManager.sell_all_products()
+	assert(processing_sale > 0, "Продажа переработанной продукции должна приносить монеты")
+	assert(GameManager.coins > processing_coins_before_sale, "Казна должна увеличиться после продажи переработанной продукции")
+	assert(
+		ProcessingManager.get_product_amount("flour") == 0.0
+		and ProcessingManager.get_product_amount("oil") == 0.0
+		and ProcessingManager.get_product_amount("cheese") == 0.0,
+		"После продажи склад готовой продукции должен очиститься"
+	)
+
+	ProcessingManager.facility_levels = {"flour_mill": 2, "oil_press": 1, "dairy": 1}
+	ProcessingManager.products = {"flour": 11.0, "oil": 2.0, "cheese": 1.0}
+	ProcessingManager.auto_sell_products = false
+	ProcessingManager.save_to_settings()
+	ProcessingManager.facility_levels = {}
+	ProcessingManager.products = {}
+	ProcessingManager.auto_sell_products = true
+	ProcessingManager.init_from_settings()
+	assert(ProcessingManager.get_facility_level("flour_mill") == 2, "Уровень мукомольного цеха должен сохраниться")
+	assert(ProcessingManager.get_facility_level("oil_press") == 1, "Уровень маслопресса должен сохраниться")
+	assert(ProcessingManager.get_facility_level("dairy") == 1, "Уровень молочного цеха должен сохраниться")
+	assert(is_equal_approx(ProcessingManager.get_product_amount("flour"), 11.0), "Запас муки должен сохраниться")
+	assert(not ProcessingManager.auto_sell_products, "Режим автопродажи переработки должен сохраниться")
+	print("  ✔ ТЕСТ 19 УСПЕШНО ПРОЙДЕН!")
+
+	ProcessingManager.facility_levels = old_processing_levels
+	ProcessingManager.products = old_processing_products
+	ProcessingManager.lifetime_output = old_processing_lifetime
+	ProcessingManager.auto_sell_products = old_processing_auto_sell
+	ProcessingManager.total_batches = old_processing_batches
+	ProcessingManager.total_product_coins = old_processing_coins
+	ProcessingManager.last_tick_at = old_processing_tick
+	ProcessingManager.initialized = true
+	ProcessingManager.save_to_settings()
+	GameManager.coins = old_processing_game_coins
+	GameManager.total_coins_earned = old_processing_total_earned
+	GameManager.subsidy_debt = old_processing_subsidy
+	GameManager.loan_debt = old_processing_loan
+	InventoryManager.stock = old_processing_stock
+	InventoryManager.quality_stock = old_processing_quality_stock
+	LivestockManager.milk_l = old_processing_milk
+	InventoryManager.save_to_settings()
+	LivestockManager.save_to_settings()
 	GameManager.save_to_settings()
 
 	print("\n🎉 ВСЕ ТЕСТЫ УСПЕШНО ПРОЙДЕНЫ! СИСТЕМА ПОЛНОСТЬЮ ИСПРАВНА!")
